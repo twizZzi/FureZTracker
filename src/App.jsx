@@ -1595,7 +1595,7 @@ function DayFoodPanel({
         )}
       </div>
 
-      <div className="macro-grid">
+      <div className="macro-list">
         <div>
           <span>Белки</span>
           <strong>
@@ -1912,7 +1912,7 @@ function FoodPage({
 
             <p className="food-note">Осталось: {remainingCalories} ккал</p>
 
-            <div className="macro-grid">
+            <div className="macro-list">
               <div>
                 <span>Белки</span>
                 <strong>{eatenProtein}/{dailyProtein} г</strong>
