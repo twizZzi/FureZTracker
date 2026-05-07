@@ -965,7 +965,6 @@ export default function App() {
           />
         )}
 
-        {tab === "settings" && <SettingsPage />}
       </main>
 
       <BottomNav activeTab={tab} setTab={setTab} />
@@ -2003,41 +2002,29 @@ function ProfilePage({ profile, bmi, bmiStatus, updateProfile }) {
           <p className="profile-hint">Укажи вес и рост, чтобы рассчитать ИМТ.</p>
         )}
       </section>
-    </>
-  );
-}
 
-function SettingsPage() {
-  return (
-    <>
-      <header className="header">
-        <div>
-          <p className="eyebrow">FureZ Tracker</p>
-          <h1>Настройки</h1>
-        </div>
-      </header>
+      <section className="profile-card">
+  <p className="eyebrow">Приложение</p>
+  <h2>FureZ Tracker</h2>
 
-      <section className="settings-card">
-        <p className="eyebrow">Приложение</p>
-        <h2>FureZ Tracker</h2>
+  <div className="settings-list">
+    <div className="settings-row">
+      <div>
+        <strong>Версия</strong>
+        <p>0.2.0</p>
+        <span className="made-by">Made with love by FureZ</span>
+      </div>
+    </div>
+  </div>
+</section>
 
-        <div className="settings-list">
-          <div className="settings-row">
-            <div>
-              <strong>Версия</strong>
-              <p>0.2.0</p>
-              <span className="made-by">Made with love by FureZ</span>
-            </div>
-          </div>
-        </div>
-      </section>
     </>
   );
 }
 
 function BottomNav({ activeTab, setTab }) {
   return (
-    <nav className="bottom-nav">
+    <nav className="bottom-nav bottom-nav-three">
       <button
         className={activeTab === "workouts" ? "nav-active" : ""}
         onClick={() => setTab("workouts")}
@@ -2057,13 +2044,6 @@ function BottomNav({ activeTab, setTab }) {
         onClick={() => setTab("profile")}
       >
         Профиль
-      </button>
-
-      <button
-        className={activeTab === "settings" ? "nav-active" : ""}
-        onClick={() => setTab("settings")}
-      >
-        Настройки
       </button>
     </nav>
   );
