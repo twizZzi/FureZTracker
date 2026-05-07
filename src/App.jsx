@@ -13,10 +13,12 @@ const STORAGE_KEY = "furez-tracker-v2-data";
 
 const initialData = {
   profile: {
-    weight: "",
-    height: "",
-    goal: "maintain",
-  },
+  weight: "",
+  height: "",
+  gender: "male",
+  age: "",
+  goal: "maintain",
+},
 
   exerciseLibrary: [
     { id: "bench-press", name: "Жим лёжа", muscleGroup: "Грудь" },
@@ -788,25 +790,25 @@ export default function App() {
     setEditingFoodId(null);
   };
 
-  const addFoodEntry = () => {
-    if (!newFood.name.trim()) return;
+  const addFoodEntry = (targetDateKey = todayDateKey) => {
+  if (!newFood.name.trim()) return;
 
-    setData((prev) => {
-      const currentFoodEntries = prev.foodEntries || [];
+  setData((prev) => {
+    const currentFoodEntries = prev.foodEntries || [];
 
-      const editingFoodEntry = currentFoodEntries.find(
-        (item) => item.id === editingFoodId
-      );
+    const editingFoodEntry = currentFoodEntries.find(
+      (item) => item.id === editingFoodId
+    );
 
-      const foodEntry = {
-        id: editingFoodId || Date.now(),
-        date: editingFoodEntry?.date || todayDateKey,
-        name: newFood.name.trim(),
-        calories: Number(newFood.calories) || 0,
-        protein: Number(newFood.protein) || 0,
-        fat: Number(newFood.fat) || 0,
-        carbs: Number(newFood.carbs) || 0,
-      };
+    const foodEntry = {
+      id: editingFoodId || Date.now(),
+      date: editingFoodEntry?.date || targetDateKey,
+      name: newFood.name.trim(),
+      calories: Number(newFood.calories) || 0,
+      protein: Number(newFood.protein) || 0,
+      fat: Number(newFood.fat) || 0,
+      carbs: Number(newFood.carbs) || 0,
+    };
 
       const updatedFoodEntries =
         editingFoodId === null
@@ -887,6 +889,13 @@ export default function App() {
             selectedWorkoutLog={selectedWorkoutLog}
             selectedDayFoodEntries={selectedDayFoodEntries}
             selectedFoodTotals={selectedFoodTotals}
+            newFood={newFood}
+            editingFoodId={editingFoodId}
+            setNewFood={setNewFood}
+            addFoodEntry={addFoodEntry}
+            startEditFoodEntry={startEditFoodEntry}
+            deleteFoodEntry={deleteFoodEntry}
+            resetFoodForm={resetFoodForm}
             selectedDayRemainingCalories={selectedDayRemainingCalories}
             selectedDayNote={selectedDayNote}
             dailyCalories={dailyCalories}
@@ -991,6 +1000,13 @@ function WorkoutsPage({
   selectedFoodTotals,
   selectedDayRemainingCalories,
   selectedDayNote,
+  newFood,
+  editingFoodId,
+  setNewFood,
+  addFoodEntry,
+  startEditFoodEntry,
+  deleteFoodEntry,
+  resetFoodForm, 
   dailyCalories,
   dailyProtein,
   dailyFat,
@@ -1138,108 +1154,113 @@ function WorkoutsPage({
         />
       )}
 
-      {selectedDay && !isTemplateManagerOpen && (
-        <section className="workout-panel">
-          <div className="panel-top">
-            <div>
-              <p className="eyebrow">
-                {selectedDate.toLocaleDateString("ru-RU", {
-                  weekday: "long",
-                  day: "numeric",
-                  month: "long",
-                })}
-              </p>
+{selectedDay && !isTemplateManagerOpen && (
+  <section className="workout-panel">
+    <div className="panel-top">
+      <div>
+        <p className="eyebrow">
+          {selectedDate.toLocaleDateString("ru-RU", {
+            weekday: "long",
+            day: "numeric",
+            month: "long",
+          })}
+        </p>
 
-              <h2>
-                {selectedWorkoutLog ? selectedWorkoutLog.title : "Новая тренировка"}
-              </h2>
-            </div>
+        <h2>{selectedWorkoutLog ? selectedWorkoutLog.title : "День"}</h2>
+      </div>
 
-            <button className="icon-button" onClick={closeDay}>
-              ×
-            </button>
-          </div>
+      <button className="icon-button" onClick={closeDay}>
+        ×
+      </button>
+    </div>
 
-          {!selectedWorkoutLog ? (
-            <CreateWorkoutPanel
-              workoutTemplates={workoutTemplates}
-              createWorkoutForSelectedDay={createWorkoutForSelectedDay}
-            />
-          ) : (
-            <>
-              <div className="day-panel-tabs three">
-                <button
-                  type="button"
-                  className={selectedDayPanel === "workout" ? "active" : ""}
-                  onClick={() => setSelectedDayPanel("workout")}
-                >
-                  Тренировка
-                </button>
+    <div className="day-panel-tabs three">
+      <button
+        type="button"
+        className={selectedDayPanel === "workout" ? "active" : ""}
+        onClick={() => setSelectedDayPanel("workout")}
+      >
+        Тренировка
+      </button>
 
-                <button
-                  type="button"
-                  className={selectedDayPanel === "food" ? "active" : ""}
-                  onClick={() => setSelectedDayPanel("food")}
-                >
-                  Еда
-                </button>
+      <button
+        type="button"
+        className={selectedDayPanel === "food" ? "active" : ""}
+        onClick={() => setSelectedDayPanel("food")}
+      >
+        Еда
+      </button>
 
-                <button
-                  type="button"
-                  className={selectedDayPanel === "note" ? "active" : ""}
-                  onClick={() => setSelectedDayPanel("note")}
-                >
-                  Заметка
-                </button>
-              </div>
+      <button
+        type="button"
+        className={selectedDayPanel === "note" ? "active" : ""}
+        onClick={() => setSelectedDayPanel("note")}
+      >
+        Заметка
+      </button>
+    </div>
 
-              {selectedDayPanel === "workout" && (
-                <WorkoutLogView
-                  workoutLog={selectedWorkoutLog}
-                  exerciseLibrary={exerciseLibrary}
-                  updateWorkoutLogTitle={updateWorkoutLogTitle}
-                  updateWorkoutSet={updateWorkoutSet}
-                  addSetToExercise={addSetToExercise}
-                  removeSetFromExercise={removeSetFromExercise}
-                  addExerciseToSelectedWorkout={addExerciseToSelectedWorkout}
-                  removeExerciseFromSelectedWorkout={removeExerciseFromSelectedWorkout}
-                  deleteSelectedWorkout={deleteSelectedWorkout}
-                  getPreviousExerciseInfo={getPreviousExerciseInfo}
-                />
-              )}
+    {selectedDayPanel === "workout" && (
+      <>
+        {!selectedWorkoutLog ? (
+          <CreateWorkoutPanel
+            workoutTemplates={workoutTemplates}
+            createWorkoutForSelectedDay={createWorkoutForSelectedDay}
+          />
+        ) : (
+          <WorkoutLogView
+            workoutLog={selectedWorkoutLog}
+            exerciseLibrary={exerciseLibrary}
+            updateWorkoutLogTitle={updateWorkoutLogTitle}
+            updateWorkoutSet={updateWorkoutSet}
+            addSetToExercise={addSetToExercise}
+            removeSetFromExercise={removeSetFromExercise}
+            addExerciseToSelectedWorkout={addExerciseToSelectedWorkout}
+            removeExerciseFromSelectedWorkout={removeExerciseFromSelectedWorkout}
+            deleteSelectedWorkout={deleteSelectedWorkout}
+            getPreviousExerciseInfo={getPreviousExerciseInfo}
+          />
+        )}
+      </>
+    )}
 
-              {selectedDayPanel === "food" && (
-                <DayFoodPanel
-                  entries={selectedDayFoodEntries}
-                  totals={selectedFoodTotals}
-                  dailyCalories={dailyCalories}
-                  dailyProtein={dailyProtein}
-                  dailyFat={dailyFat}
-                  dailyCarbs={dailyCarbs}
-                  remainingCalories={selectedDayRemainingCalories}
-                  openFoodEditor={openFoodEditor}
-                />
-              )}
+    {selectedDayPanel === "food" && (
+      <DayFoodPanel
+        selectedDateKey={selectedDateKey}
+        entries={selectedDayFoodEntries}
+        totals={selectedFoodTotals}
+        dailyCalories={dailyCalories}
+        dailyProtein={dailyProtein}
+        dailyFat={dailyFat}
+        dailyCarbs={dailyCarbs}
+        remainingCalories={selectedDayRemainingCalories}
+        newFood={newFood}
+        editingFoodId={editingFoodId}
+        setNewFood={setNewFood}
+        addFoodEntry={addFoodEntry}
+        startEditFoodEntry={startEditFoodEntry}
+        deleteFoodEntry={deleteFoodEntry}
+        resetFoodForm={resetFoodForm}
+    />
+    )}
 
-              {selectedDayPanel === "note" && (
-                <div className="day-note-panel">
-                  <p className="eyebrow">Заметка дня</p>
+    {selectedDayPanel === "note" && (
+      <div className="day-note-panel">
+        <p className="eyebrow">Заметка дня</p>
 
-                  <textarea
-                    value={selectedDayNote}
-                    onChange={(event) => updateDayNote(event.target.value)}
-                    placeholder="Самочувствие, настроение, сложность тренировки..."
-                  />
+        <textarea
+          value={selectedDayNote}
+          onChange={(event) => updateDayNote(event.target.value)}
+          placeholder="Самочувствие, настроение, сложность тренировки..."
+        />
 
-                  <p className="day-food-hint">
-                    Заметка сохраняется автоматически для выбранной даты.
-                  </p>
-                </div>
-              )}
-            </>
-          )}
-        </section>
-      )}
+        <p className="day-food-hint">
+          Заметка сохраняется автоматически для выбранной даты.
+        </p>
+      </div>
+    )}
+  </section>
+)}
     </>
   );
 }
@@ -1436,15 +1457,115 @@ function WorkoutLogView({
   );
 }
 
+function FoodForm({
+  newFood,
+  editingFoodId,
+  setNewFood,
+  onSave,
+  resetFoodForm,
+}) {
+  return (
+    <div className="food-form">
+      <input
+        type="text"
+        placeholder="Название"
+        value={newFood.name}
+        onChange={(event) =>
+          setNewFood((prev) => ({
+            ...prev,
+            name: event.target.value,
+          }))
+        }
+      />
+
+      <input
+        type="number"
+        placeholder="Калории"
+        value={newFood.calories}
+        onChange={(event) =>
+          setNewFood((prev) => ({
+            ...prev,
+            calories: event.target.value,
+          }))
+        }
+      />
+
+      <div className="form-grid">
+        <input
+          type="number"
+          placeholder="Белки"
+          value={newFood.protein}
+          onChange={(event) =>
+            setNewFood((prev) => ({
+              ...prev,
+              protein: event.target.value,
+            }))
+          }
+        />
+
+        <input
+          type="number"
+          placeholder="Жиры"
+          value={newFood.fat}
+          onChange={(event) =>
+            setNewFood((prev) => ({
+              ...prev,
+              fat: event.target.value,
+            }))
+          }
+        />
+      </div>
+
+      <input
+        type="number"
+        placeholder="Углеводы"
+        value={newFood.carbs}
+        onChange={(event) =>
+          setNewFood((prev) => ({
+            ...prev,
+            carbs: event.target.value,
+          }))
+        }
+      />
+
+      <button type="button" className="primary-button" onClick={onSave}>
+        {editingFoodId === null ? "Добавить" : "Сохранить"}
+      </button>
+
+      {editingFoodId !== null && (
+        <button
+          type="button"
+          className="secondary-button"
+          onClick={resetFoodForm}
+        >
+          Отменить редактирование
+        </button>
+      )}
+    </div>
+  );
+}
+
 function DayFoodPanel({
-  entries,
-  totals,
+  selectedDateKey,
+  entries = [],
+  totals = {
+    calories: 0,
+    protein: 0,
+    fat: 0,
+    carbs: 0,
+  },
   dailyCalories,
   dailyProtein,
   dailyFat,
   dailyCarbs,
   remainingCalories,
-  openFoodEditor,
+  newFood,
+  editingFoodId,
+  setNewFood,
+  addFoodEntry,
+  startEditFoodEntry,
+  deleteFoodEntry,
+  resetFoodForm,
 }) {
   return (
     <div className="day-food-panel">
@@ -1461,7 +1582,10 @@ function DayFoodPanel({
             <div className="food-progress compact">
               <div
                 style={{
-                  width: `${Math.min((totals.calories / dailyCalories) * 100, 100)}%`,
+                  width: `${Math.min(
+                    (totals.calories / dailyCalories) * 100,
+                    100
+                  )}%`,
                 }}
               />
             </div>
@@ -1474,30 +1598,57 @@ function DayFoodPanel({
       <div className="macro-grid">
         <div>
           <span>Белки</span>
-          <strong>{totals.protein}/{dailyProtein || 0} г</strong>
+          <strong>
+            {totals.protein}/{dailyProtein || 0} г
+          </strong>
         </div>
 
         <div>
           <span>Жиры</span>
-          <strong>{totals.fat}/{dailyFat || 0} г</strong>
+          <strong>
+            {totals.fat}/{dailyFat || 0} г
+          </strong>
         </div>
 
         <div>
           <span>Углеводы</span>
-          <strong>{totals.carbs}/{dailyCarbs || 0} г</strong>
+          <strong>
+            {totals.carbs}/{dailyCarbs || 0} г
+          </strong>
         </div>
       </div>
 
-      <p className="day-food-hint">Нажми на блюдо, чтобы редактировать.</p>
+      <section className="day-food-form-card">
+        <p className="eyebrow">
+          {editingFoodId === null ? "Добавить еду" : "Редактировать еду"}
+        </p>
+
+        <FoodForm
+          newFood={newFood}
+          editingFoodId={editingFoodId}
+          setNewFood={setNewFood}
+          onSave={() => addFoodEntry(selectedDateKey)}
+          resetFoodForm={resetFoodForm}
+        />
+      </section>
+
+      <p className="day-food-hint">
+        Еда сохраняется именно для выбранной даты.
+      </p>
 
       {entries.length > 0 ? (
         <div className="food-list">
           {entries.map((item) => (
-            <div className="food-item" key={item.id}>
+            <div
+              className={`food-item ${
+                editingFoodId === item.id ? "editing" : ""
+              }`}
+              key={item.id}
+            >
               <button
                 type="button"
                 className="food-edit-area"
-                onClick={() => openFoodEditor(item)}
+                onClick={() => startEditFoodEntry(item)}
               >
                 <strong>{item.name}</strong>
 
@@ -1505,6 +1656,14 @@ function DayFoodPanel({
                   {item.calories} ккал · Б {item.protein} · Ж {item.fat} · У{" "}
                   {item.carbs}
                 </p>
+              </button>
+
+              <button
+                type="button"
+                className="delete-exercise-button"
+                onClick={() => deleteFoodEntry(item.id)}
+              >
+                ×
               </button>
             </div>
           ))}
@@ -1778,71 +1937,6 @@ function FoodPage({
       </section>
 
       <section className="food-card">
-        <p className="eyebrow">
-          {editingFoodId === null ? "Добавить еду" : "Редактировать еду"}
-        </p>
-
-        <div className="food-form">
-          <input
-            type="text"
-            placeholder="Название"
-            value={newFood.name}
-            onChange={(event) =>
-              setNewFood((prev) => ({ ...prev, name: event.target.value }))
-            }
-          />
-
-          <input
-            type="number"
-            placeholder="Калории"
-            value={newFood.calories}
-            onChange={(event) =>
-              setNewFood((prev) => ({ ...prev, calories: event.target.value }))
-            }
-          />
-
-          <div className="form-grid">
-            <input
-              type="number"
-              placeholder="Белки"
-              value={newFood.protein}
-              onChange={(event) =>
-                setNewFood((prev) => ({ ...prev, protein: event.target.value }))
-              }
-            />
-
-            <input
-              type="number"
-              placeholder="Жиры"
-              value={newFood.fat}
-              onChange={(event) =>
-                setNewFood((prev) => ({ ...prev, fat: event.target.value }))
-              }
-            />
-          </div>
-
-          <input
-            type="number"
-            placeholder="Углеводы"
-            value={newFood.carbs}
-            onChange={(event) =>
-              setNewFood((prev) => ({ ...prev, carbs: event.target.value }))
-            }
-          />
-
-          <button type="button" className="primary-button" onClick={addFoodEntry}>
-            {editingFoodId === null ? "Добавить" : "Сохранить"}
-          </button>
-
-          {editingFoodId !== null && (
-            <button type="button" className="secondary-button" onClick={resetFoodForm}>
-              Отменить редактирование
-            </button>
-          )}
-        </div>
-      </section>
-
-      <section className="food-card">
         <p className="eyebrow">Еда за сегодня</p>
 
         {foodEntries.length > 0 ? (
@@ -1924,39 +2018,79 @@ function ProfilePage({ profile, bmi, bmiStatus, updateProfile }) {
         </div>
       </header>
 
-      <section className="profile-card">
+      <section className="profile-card compact-profile-card">
         <p className="eyebrow">Мои параметры</p>
 
-        <div className="profile-fields">
-          <label className="profile-field">
+        <div className="profile-compact-grid">
+          <label className="profile-compact-field">
             <span>Вес</span>
 
-            <div className="profile-input-row">
+            <div className="profile-compact-input">
               <input
                 type="number"
                 value={profile?.weight || ""}
-                onChange={(event) => updateProfile("weight", event.target.value)}
+                onChange={(event) =>
+                  updateProfile("weight", event.target.value)
+                }
                 placeholder="75"
               />
-
               <strong>кг</strong>
             </div>
           </label>
 
-          <label className="profile-field">
+          <label className="profile-compact-field">
             <span>Рост</span>
 
-            <div className="profile-input-row">
+            <div className="profile-compact-input">
               <input
                 type="number"
                 value={profile?.height || ""}
-                onChange={(event) => updateProfile("height", event.target.value)}
+                onChange={(event) =>
+                  updateProfile("height", event.target.value)
+                }
                 placeholder="180"
               />
-
               <strong>см</strong>
             </div>
           </label>
+
+          <label className="profile-compact-field">
+            <span>Возраст</span>
+
+            <div className="profile-compact-input">
+              <input
+                type="number"
+                value={profile?.age || ""}
+                onChange={(event) =>
+                  updateProfile("age", event.target.value)
+                }
+                placeholder="20"
+              />
+              <strong>лет</strong>
+            </div>
+          </label>
+
+          <div className="profile-compact-field">
+            <span>Пол</span>
+
+            <div className="gender-row">
+              <button
+                type="button"
+                className={profile?.gender === "male" ? "active" : ""}
+                onClick={() => updateProfile("gender", "male")}
+              >
+                Муж
+              </button>
+
+              <button
+                type="button"
+                className={profile?.gender === "female" ? "active" : ""}
+                onClick={() => updateProfile("gender", "female")}
+              >
+                Жен
+              </button>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -1999,25 +2133,16 @@ function ProfilePage({ profile, bmi, bmiStatus, updateProfile }) {
             <span>{bmiStatus}</span>
           </div>
         ) : (
-          <p className="profile-hint">Укажи вес и рост, чтобы рассчитать ИМТ.</p>
+          <p className="profile-hint">
+            Укажи вес и рост, чтобы рассчитать ИМТ.
+          </p>
         )}
       </section>
 
-      <section className="profile-card">
-  <p className="eyebrow">Приложение</p>
-  <h2>FureZ Tracker</h2>
-
-  <div className="settings-list">
-    <div className="settings-row">
-      <div>
-        <strong>Версия</strong>
-        <p>0.2.0</p>
-        <span className="made-by">Made with love by FureZ</span>
+      <div className="profile-footer">
+        <span>FureZ Tracker · v0.2.0</span>
+        <span>Made with love by FureZ</span>
       </div>
-    </div>
-  </div>
-</section>
-
     </>
   );
 }
