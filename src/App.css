@@ -647,15 +647,19 @@ p {
 .macro-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-  margin-top: 16px;
+  gap: 10px;
+  margin-top: 18px;
 }
 
 .macro-grid div {
   min-width: 0;
-  padding: 13px 8px;
+  min-height: 72px;
+  padding: 14px 10px;
   border-radius: 20px;
   background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .macro-grid span {
@@ -663,16 +667,17 @@ p {
   color: #777777;
   font-size: 11px;
   font-weight: 800;
+  line-height: 1.2;
   text-transform: uppercase;
 }
 
 .macro-grid strong {
   display: block;
-  margin-top: 6px;
+  margin-top: 10px;
   color: #111111;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 800;
-  line-height: 1.15;
+  line-height: 1.25;
   white-space: nowrap;
 }
 
