@@ -1,60 +1,71 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import "./App.css";
 
 /* =========================
-   1. Initial data
+   Storage
+========================= */
+
+const STORAGE_KEY = "furez-tracker-v2-data";
+
+/* =========================
+   Initial data
 ========================= */
 
 const initialData = {
-  trainingDays: [1, 3, 5],
-  completedWorkouts: [],
-  completedSets: {},
-  foodEntries: [],
-
   profile: {
     weight: "",
     height: "",
     goal: "maintain",
   },
 
-  workouts: {
-    1: {
+  exerciseLibrary: [
+    { id: "bench-press", name: "Жим лёжа", muscleGroup: "Грудь" },
+    { id: "dumbbell-fly", name: "Разводка гантелей", muscleGroup: "Грудь" },
+    { id: "lat-pulldown", name: "Тяга верхнего блока", muscleGroup: "Спина" },
+    { id: "squat", name: "Присед", muscleGroup: "Ноги" },
+    { id: "biceps-curl", name: "Подъём на бицепс", muscleGroup: "Бицепс" },
+    { id: "triceps-extension", name: "Разгибание на трицепс", muscleGroup: "Трицепс" },
+    { id: "shoulder-press", name: "Жим гантелей сидя", muscleGroup: "Плечи" },
+  ],
+
+  workoutTemplates: [
+    {
+      id: "chest-triceps",
       title: "Грудь / Трицепс",
       exercises: [
-        { name: "Жим лёжа", sets: 4, reps: "8–10", weight: "60 кг" },
-        { name: "Разводка гантелей", sets: 3, reps: "10–12", weight: "14 кг" },
+        { exerciseId: "bench-press", sets: 4, reps: "8–10", weight: "60 кг" },
+        { exerciseId: "dumbbell-fly", sets: 3, reps: "10–12", weight: "14 кг" },
+        { exerciseId: "triceps-extension", sets: 3, reps: "10–12", weight: "20 кг" },
       ],
     },
-
-    3: {
+    {
+      id: "back-biceps",
       title: "Спина / Бицепс",
       exercises: [
-        { name: "Тяга верхнего блока", sets: 4, reps: "10–12", weight: "50 кг" },
+        { exerciseId: "lat-pulldown", sets: 4, reps: "10–12", weight: "50 кг" },
+        { exerciseId: "biceps-curl", sets: 3, reps: "10–12", weight: "12 кг" },
       ],
     },
-
-    5: {
+    {
+      id: "legs-shoulders",
       title: "Ноги / Плечи",
       exercises: [
-        { name: "Присед", sets: 4, reps: "8–10", weight: "70 кг" },
+        { exerciseId: "squat", sets: 4, reps: "8–10", weight: "70 кг" },
+        { exerciseId: "shoulder-press", sets: 3, reps: "8–10", weight: "16 кг" },
       ],
     },
-  },
+  ],
+
+  workoutLogs: {},
+  foodEntries: [],
+  dayNotes: {},
 };
 
+/* =========================
+   Constants
+========================= */
+
 const weekDaysShort = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
-
-const weekDaysFull = [
-  "Понедельник",
-  "Вторник",
-  "Среда",
-  "Четверг",
-  "Пятница",
-  "Суббота",
-  "Воскресенье",
-];
-
-const calendarWeekDays = ["M", "T", "W", "T", "F", "S", "S"];
 
 const calorieMultiplier = {
   bulk: 35,
@@ -63,8 +74,12 @@ const calorieMultiplier = {
 };
 
 /* =========================
-   2. Helper functions
+   Helpers
 ========================= */
+
+function createId(prefix) {
+  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
 
 function getDayOfWeek(date) {
   const jsDay = date.getDay();
@@ -72,14 +87,7 @@ function getDayOfWeek(date) {
 }
 
 function createDateKey(year, month, day) {
-  const monthNumber = String(month + 1).padStart(2, "0");
-  const dayNumber = String(day).padStart(2, "0");
-
-  return `${year}-${monthNumber}-${dayNumber}`;
-}
-
-function createSetKey(dateKey, exerciseIndex) {
-  return `${dateKey}-exercise-${exerciseIndex}`;
+  return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
 function getBmiStatus(bmi) {
@@ -87,39 +95,46 @@ function getBmiStatus(bmi) {
   if (bmi < 18.5) return "Недобор";
   if (bmi < 25) return "Норма";
   if (bmi < 30) return "Выше нормы";
-
   return "Высокий";
 }
 
-function areAllWorkoutSetsDone(workout, completedSets, dateKey) {
-  if (!workout || workout.exercises.length === 0) return false;
+function normalizeData(savedData) {
+  return {
+    ...initialData,
+    ...(savedData || {}),
+    profile: {
+      ...initialData.profile,
+      ...(savedData?.profile || {}),
+    },
+    exerciseLibrary: savedData?.exerciseLibrary || initialData.exerciseLibrary,
+    workoutTemplates: savedData?.workoutTemplates || initialData.workoutTemplates,
+    workoutLogs: savedData?.workoutLogs || {},
+    foodEntries: savedData?.foodEntries || [],
+    dayNotes: savedData?.dayNotes || {},
+  };
+}
 
-  return workout.exercises.every((exercise, exerciseIndex) => {
-    const setKey = createSetKey(dateKey, exerciseIndex);
-    const doneSets = completedSets[setKey] || [];
+function isWorkoutCompleted(workoutLog) {
+  if (!workoutLog || workoutLog.exercises.length === 0) return false;
 
-    return doneSets.length >= exercise.sets;
-  });
+  const allSets = workoutLog.exercises.flatMap((exercise) => exercise.sets || []);
+  if (allSets.length === 0) return false;
+
+  return allSets.every((set) => set.done);
 }
 
 /* =========================
-   3. Main App
+   App
 ========================= */
 
 export default function App() {
   const [tab, setTab] = useState("workouts");
+  const [visibleDate, setVisibleDate] = useState(() => new Date());
   const [selectedDay, setSelectedDay] = useState(null);
   const [selectedDayPanel, setSelectedDayPanel] = useState("workout");
-  const [isWorkoutSettingsOpen, setIsWorkoutSettingsOpen] = useState(false);
-  const [settingsDay, setSettingsDay] = useState(1);
-  const [editingExerciseIndex, setEditingExerciseIndex] = useState(null);
-
-  const [newExercise, setNewExercise] = useState({
-    name: "",
-    weight: "",
-    sets: 3,
-    reps: "",
-  });
+  const [isTemplateManagerOpen, setIsTemplateManagerOpen] = useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] = useState("chest-triceps");
+  const [editingFoodId, setEditingFoodId] = useState(null);
 
   const [newFood, setNewFood] = useState({
     name: "",
@@ -129,39 +144,43 @@ export default function App() {
     carbs: "",
   });
 
-  const [editingFoodId, setEditingFoodId] = useState(null);
+  const [newExerciseName, setNewExerciseName] = useState("");
+  const [newExerciseGroup, setNewExerciseGroup] = useState("");
 
   const [data, setData] = useState(() => {
-    const savedData = localStorage.getItem("furez-tracker-data");
+    const savedData = localStorage.getItem(STORAGE_KEY);
 
     if (!savedData) return initialData;
 
     try {
-      return {
-        ...initialData,
-        ...JSON.parse(savedData),
-      };
+      return normalizeData(JSON.parse(savedData));
     } catch {
       return initialData;
     }
   });
 
   useEffect(() => {
-    localStorage.setItem("furez-tracker-data", JSON.stringify(data));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   }, [data]);
 
   /* =========================
-     4. Calendar calculations
+     Calendar
   ========================= */
 
   const today = new Date();
 
-  const currentYear = today.getFullYear();
-  const currentMonth = today.getMonth();
+  const todayYear = today.getFullYear();
+  const todayMonth = today.getMonth();
   const todayDay = today.getDate();
 
-  const monthName = today.toLocaleString("en-US", {
+  const currentYear = visibleDate.getFullYear();
+  const currentMonth = visibleDate.getMonth();
+
+  const isCurrentMonth = currentYear === todayYear && currentMonth === todayMonth;
+
+  const monthName = visibleDate.toLocaleString("ru-RU", {
     month: "long",
+    year: "numeric",
   });
 
   const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
@@ -170,10 +189,43 @@ export default function App() {
 
   const days = Array.from({ length: daysInMonth }, (_, index) => index + 1);
   const emptyDays = Array.from({ length: calendarOffset }, (_, index) => index);
-  const todayDateKey = createDateKey(currentYear, currentMonth, todayDay);
+
+  const todayDateKey = createDateKey(todayYear, todayMonth, todayDay);
+
+  const selectedDateKey = selectedDay
+    ? createDateKey(currentYear, currentMonth, selectedDay)
+    : null;
+
+  const selectedDate = selectedDay
+    ? new Date(currentYear, currentMonth, selectedDay)
+    : null;
+
+  const selectedWorkoutLog = selectedDateKey
+    ? data.workoutLogs[selectedDateKey]
+    : null;
+
+  const selectedDayNote = selectedDateKey
+    ? data.dayNotes?.[selectedDateKey] || ""
+    : "";
+
+  const changeMonth = (direction) => {
+    setVisibleDate((prev) => {
+      return new Date(prev.getFullYear(), prev.getMonth() + direction, 1);
+    });
+
+    setSelectedDay(null);
+    setSelectedDayPanel("workout");
+    setIsTemplateManagerOpen(false);
+  };
+
+  const openDay = (day) => {
+    setSelectedDay(day);
+    setSelectedDayPanel("workout");
+    setIsTemplateManagerOpen(false);
+  };
 
   /* =========================
-     5. Profile and food calculations
+     Profile / calories
   ========================= */
 
   const profileWeight = Number(data.profile?.weight);
@@ -187,9 +239,7 @@ export default function App() {
   const bmiStatus = getBmiStatus(bmi);
 
   const dailyCalories = profileWeight
-    ? Math.round(
-        profileWeight * calorieMultiplier[data.profile?.goal || "maintain"]
-      )
+    ? Math.round(profileWeight * calorieMultiplier[data.profile?.goal || "maintain"])
     : null;
 
   const dailyProtein = profileWeight ? Math.round(profileWeight * 2) : null;
@@ -200,33 +250,47 @@ export default function App() {
       ? Math.round((dailyCalories - dailyProtein * 4 - dailyFat * 9) / 4)
       : null;
 
+  /* =========================
+     Food
+  ========================= */
+
   const foodEntries = data.foodEntries || [];
 
   const todayFoodEntries = foodEntries.filter(
     (item) => item.date === todayDateKey || !item.date
   );
 
-  const eatenCalories = todayFoodEntries.reduce(
-    (sum, item) => sum + Number(item.calories || 0),
-    0
-  );
+  const selectedDayFoodEntries = selectedDateKey
+    ? foodEntries.filter((item) => item.date === selectedDateKey || !item.date)
+    : [];
 
-  const eatenProtein = todayFoodEntries.reduce(
-    (sum, item) => sum + Number(item.protein || 0),
-    0
-  );
+  const getFoodTotals = (entries) => {
+    return entries.reduce(
+      (totals, item) => ({
+        calories: totals.calories + Number(item.calories || 0),
+        protein: totals.protein + Number(item.protein || 0),
+        fat: totals.fat + Number(item.fat || 0),
+        carbs: totals.carbs + Number(item.carbs || 0),
+      }),
+      {
+        calories: 0,
+        protein: 0,
+        fat: 0,
+        carbs: 0,
+      }
+    );
+  };
 
-  const eatenFat = todayFoodEntries.reduce(
-    (sum, item) => sum + Number(item.fat || 0),
-    0
-  );
+  const todayFoodTotals = getFoodTotals(todayFoodEntries);
+  const selectedFoodTotals = getFoodTotals(selectedDayFoodEntries);
 
-  const eatenCarbs = todayFoodEntries.reduce(
-    (sum, item) => sum + Number(item.carbs || 0),
-    0
-  );
+  const remainingCalories = dailyCalories
+    ? dailyCalories - todayFoodTotals.calories
+    : null;
 
-  const remainingCalories = dailyCalories ? dailyCalories - eatenCalories : null;
+  const selectedDayRemainingCalories = dailyCalories
+    ? dailyCalories - selectedFoodTotals.calories
+    : null;
 
   const foodHistory = foodEntries
     .filter((item) => item.date && item.date !== todayDateKey)
@@ -257,155 +321,459 @@ export default function App() {
     .slice(0, 7);
 
   /* =========================
-     6. Workout calculations
+     Workout stats
   ========================= */
 
-  const completedWorkouts = data.completedWorkouts || [];
-
-  const isWorkoutCompleted = (day) => {
-    const dateKey = createDateKey(currentYear, currentMonth, day);
-    return completedWorkouts.includes(dateKey);
-  };
-
-  const scheduledWorkoutDays = days.filter((day) => {
-    const date = new Date(currentYear, currentMonth, day);
-    const dayOfWeek = getDayOfWeek(date);
-
-    return data.trainingDays.includes(dayOfWeek);
+  const monthWorkoutLogs = Object.values(data.workoutLogs || {}).filter((log) => {
+    return log.date?.startsWith(
+      `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}`
+    );
   });
 
-  const streakState = scheduledWorkoutDays.reduce(
-    (state, day) => {
-      const isCompleted = isWorkoutCompleted(day);
-      const isPastWorkout = day < todayDay;
+  const visibleStreak = monthWorkoutLogs.filter(isWorkoutCompleted).length || null;
 
-      if (isCompleted) {
-        return {
-          count: state.count + 1,
-          missed: 0,
-        };
-      }
-
-      if (isPastWorkout) {
-        const missed = state.missed + 1;
-
-        return {
-          count: missed >= 2 ? 0 : state.count,
-          missed,
-        };
-      }
-
-      return state;
-    },
-    {
-      count: 0,
-      missed: 0,
-    }
-  );
-
-  const visibleStreak =
-    streakState.count >= 3 && streakState.missed < 2 ? streakState.count : null;
-
-  const selectedDate = selectedDay
-    ? new Date(currentYear, currentMonth, selectedDay)
-    : null;
-
-  const selectedDayOfWeek = selectedDate ? getDayOfWeek(selectedDate) : null;
-
-  const selectedDateKey = selectedDay
-    ? createDateKey(currentYear, currentMonth, selectedDay)
-    : null;
-
-  const workout = selectedDay ? data.workouts[selectedDayOfWeek] : null;
-
-  const selectedDayFoodEntries = selectedDateKey
-    ? foodEntries.filter((item) => item.date === selectedDateKey || !item.date)
-    : [];
-
-  const selectedDayCalories = selectedDayFoodEntries.reduce(
-    (sum, item) => sum + Number(item.calories || 0),
-    0
-  );
-
-  const selectedDayProtein = selectedDayFoodEntries.reduce(
-    (sum, item) => sum + Number(item.protein || 0),
-    0
-  );
-
-  const selectedDayFat = selectedDayFoodEntries.reduce(
-    (sum, item) => sum + Number(item.fat || 0),
-    0
-  );
-
-  const selectedDayCarbs = selectedDayFoodEntries.reduce(
-    (sum, item) => sum + Number(item.carbs || 0),
-    0
-  );
-
-  const selectedDayRemainingCalories = dailyCalories
-    ? dailyCalories - selectedDayCalories
-    : null;
+  const completedWorkoutDates = Object.entries(data.workoutLogs || {})
+    .filter(([, log]) => isWorkoutCompleted(log))
+    .map(([dateKey]) => dateKey);
 
   /* =========================
-     7. Workout actions
+     Workout creation
   ========================= */
 
-  const openDay = (day) => {
-    setSelectedDay(day);
-    setSelectedDayPanel("workout");
+  const getExerciseFromLibrary = (exerciseId) => {
+    return data.exerciseLibrary.find((exercise) => exercise.id === exerciseId);
   };
 
-  const toggleExerciseSet = (exerciseIndex, setIndex) => {
-    if (!selectedDateKey || !workout) return;
+  const buildWorkoutFromTemplate = (template, dateKey) => {
+    return {
+      id: createId("workout"),
+      date: dateKey,
+      templateId: template?.id || null,
+      title: template?.title || "Новая тренировка",
+      exercises: (template?.exercises || []).map((templateExercise) => {
+        const libraryExercise = getExerciseFromLibrary(templateExercise.exerciseId);
+
+        return {
+          id: createId("logged-exercise"),
+          exerciseId: templateExercise.exerciseId,
+          name: libraryExercise?.name || "Упражнение",
+          muscleGroup: libraryExercise?.muscleGroup || "",
+          sets: Array.from(
+            { length: Number(templateExercise.sets) || 1 },
+            () => ({
+              weight: templateExercise.weight || "",
+              reps: templateExercise.reps || "",
+              done: false,
+            })
+          ),
+        };
+      }),
+    };
+  };
+
+  const createWorkoutForSelectedDay = (templateId = null) => {
+    if (!selectedDateKey) return;
+
+    const template = data.workoutTemplates.find((item) => item.id === templateId);
+
+    const workoutLog = buildWorkoutFromTemplate(template, selectedDateKey);
+
+    setData((prev) => ({
+      ...prev,
+      workoutLogs: {
+        ...(prev.workoutLogs || {}),
+        [selectedDateKey]: workoutLog,
+      },
+    }));
+  };
+
+  const deleteSelectedWorkout = () => {
+    if (!selectedDateKey) return;
+
+    const isConfirmed = window.confirm("Удалить тренировку на этот день?");
+
+    if (!isConfirmed) return;
 
     setData((prev) => {
-      const completedSets = prev.completedSets || {};
-      const completedWorkouts = prev.completedWorkouts || [];
-
-      const setKey = createSetKey(selectedDateKey, exerciseIndex);
-      const currentSets = completedSets[setKey] || [];
-      const isDone = currentSets.includes(setIndex);
-
-      const updatedSetsForExercise = isDone
-        ? currentSets.filter((item) => item !== setIndex)
-        : [...currentSets, setIndex];
-
-      const updatedCompletedSets = {
-        ...completedSets,
-        [setKey]: updatedSetsForExercise,
-      };
-
-      const isWorkoutFullyDone = areAllWorkoutSetsDone(
-        workout,
-        updatedCompletedSets,
-        selectedDateKey
-      );
-
-      const isWorkoutAlreadyCompleted =
-        completedWorkouts.includes(selectedDateKey);
-
-      let updatedCompletedWorkouts = completedWorkouts;
-
-      if (isWorkoutFullyDone && !isWorkoutAlreadyCompleted) {
-        updatedCompletedWorkouts = [...completedWorkouts, selectedDateKey];
-      }
-
-      if (!isWorkoutFullyDone && isWorkoutAlreadyCompleted) {
-        updatedCompletedWorkouts = completedWorkouts.filter(
-          (item) => item !== selectedDateKey
-        );
-      }
+      const updatedLogs = { ...(prev.workoutLogs || {}) };
+      delete updatedLogs[selectedDateKey];
 
       return {
         ...prev,
-        completedSets: updatedCompletedSets,
-        completedWorkouts: updatedCompletedWorkouts,
+        workoutLogs: updatedLogs,
+      };
+    });
+  };
+
+  const updateWorkoutLogTitle = (title) => {
+    if (!selectedDateKey) return;
+
+    setData((prev) => ({
+      ...prev,
+      workoutLogs: {
+        ...(prev.workoutLogs || {}),
+        [selectedDateKey]: {
+          ...prev.workoutLogs[selectedDateKey],
+          title,
+        },
+      },
+    }));
+  };
+
+  const updateWorkoutSet = (exerciseIndex, setIndex, field, value) => {
+    if (!selectedDateKey) return;
+
+    setData((prev) => {
+      const currentWorkout = prev.workoutLogs[selectedDateKey];
+
+      if (!currentWorkout) return prev;
+
+      const updatedExercises = currentWorkout.exercises.map((exercise, currentExerciseIndex) => {
+        if (currentExerciseIndex !== exerciseIndex) return exercise;
+
+        return {
+          ...exercise,
+          sets: exercise.sets.map((set, currentSetIndex) => {
+            if (currentSetIndex !== setIndex) return set;
+
+            return {
+              ...set,
+              [field]: value,
+            };
+          }),
+        };
+      });
+
+      return {
+        ...prev,
+        workoutLogs: {
+          ...(prev.workoutLogs || {}),
+          [selectedDateKey]: {
+            ...currentWorkout,
+            exercises: updatedExercises,
+          },
+        },
+      };
+    });
+  };
+
+  const addSetToExercise = (exerciseIndex) => {
+    if (!selectedDateKey) return;
+
+    setData((prev) => {
+      const currentWorkout = prev.workoutLogs[selectedDateKey];
+
+      if (!currentWorkout) return prev;
+
+      const updatedExercises = currentWorkout.exercises.map((exercise, index) => {
+        if (index !== exerciseIndex) return exercise;
+
+        const lastSet = exercise.sets[exercise.sets.length - 1] || {
+          weight: "",
+          reps: "",
+          done: false,
+        };
+
+        return {
+          ...exercise,
+          sets: [
+            ...exercise.sets,
+            {
+              weight: lastSet.weight,
+              reps: lastSet.reps,
+              done: false,
+            },
+          ],
+        };
+      });
+
+      return {
+        ...prev,
+        workoutLogs: {
+          ...(prev.workoutLogs || {}),
+          [selectedDateKey]: {
+            ...currentWorkout,
+            exercises: updatedExercises,
+          },
+        },
+      };
+    });
+  };
+
+  const removeSetFromExercise = (exerciseIndex, setIndex) => {
+    if (!selectedDateKey) return;
+
+    setData((prev) => {
+      const currentWorkout = prev.workoutLogs[selectedDateKey];
+
+      if (!currentWorkout) return prev;
+
+      const updatedExercises = currentWorkout.exercises.map((exercise, index) => {
+        if (index !== exerciseIndex) return exercise;
+
+        return {
+          ...exercise,
+          sets: exercise.sets.filter((_, currentSetIndex) => currentSetIndex !== setIndex),
+        };
+      });
+
+      return {
+        ...prev,
+        workoutLogs: {
+          ...(prev.workoutLogs || {}),
+          [selectedDateKey]: {
+            ...currentWorkout,
+            exercises: updatedExercises,
+          },
+        },
+      };
+    });
+  };
+
+  const addExerciseToSelectedWorkout = (exerciseId) => {
+    if (!selectedDateKey || !exerciseId) return;
+
+    const libraryExercise = getExerciseFromLibrary(exerciseId);
+
+    if (!libraryExercise) return;
+
+    setData((prev) => {
+      const currentWorkout = prev.workoutLogs[selectedDateKey];
+
+      if (!currentWorkout) return prev;
+
+      return {
+        ...prev,
+        workoutLogs: {
+          ...(prev.workoutLogs || {}),
+          [selectedDateKey]: {
+            ...currentWorkout,
+            exercises: [
+              ...currentWorkout.exercises,
+              {
+                id: createId("logged-exercise"),
+                exerciseId,
+                name: libraryExercise.name,
+                muscleGroup: libraryExercise.muscleGroup,
+                sets: [
+                  {
+                    weight: "",
+                    reps: "",
+                    done: false,
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      };
+    });
+  };
+
+  const removeExerciseFromSelectedWorkout = (exerciseIndex) => {
+    if (!selectedDateKey) return;
+
+    setData((prev) => {
+      const currentWorkout = prev.workoutLogs[selectedDateKey];
+
+      if (!currentWorkout) return prev;
+
+      return {
+        ...prev,
+        workoutLogs: {
+          ...(prev.workoutLogs || {}),
+          [selectedDateKey]: {
+            ...currentWorkout,
+            exercises: currentWorkout.exercises.filter((_, index) => index !== exerciseIndex),
+          },
+        },
       };
     });
   };
 
   /* =========================
-     8. Food actions
+     Previous exercise info
+  ========================= */
+
+  const getPreviousExerciseInfo = (exerciseId) => {
+    if (!selectedDateKey || !exerciseId) return null;
+
+    const previousLogs = Object.entries(data.workoutLogs || {})
+      .filter(([dateKey]) => dateKey < selectedDateKey)
+      .flatMap(([dateKey, workoutLog]) => {
+        return (workoutLog.exercises || [])
+          .filter((exercise) => exercise.exerciseId === exerciseId)
+          .map((exercise) => ({
+            dateKey,
+            exercise,
+          }));
+      })
+      .sort((a, b) => b.dateKey.localeCompare(a.dateKey));
+
+    return previousLogs[0] || null;
+  };
+
+  /* =========================
+     Templates
+  ========================= */
+
+  const selectedTemplate = data.workoutTemplates.find(
+    (template) => template.id === selectedTemplateId
+  );
+
+  const createTemplate = () => {
+    const template = {
+      id: createId("template"),
+      title: "Новый сет",
+      exercises: [],
+    };
+
+    setData((prev) => ({
+      ...prev,
+      workoutTemplates: [...(prev.workoutTemplates || []), template],
+    }));
+
+    setSelectedTemplateId(template.id);
+  };
+
+  const updateTemplateTitle = (title) => {
+    setData((prev) => ({
+      ...prev,
+      workoutTemplates: prev.workoutTemplates.map((template) =>
+        template.id === selectedTemplateId
+          ? {
+              ...template,
+              title,
+            }
+          : template
+      ),
+    }));
+  };
+
+  const addExerciseToTemplate = (exerciseId) => {
+    if (!exerciseId) return;
+
+    setData((prev) => ({
+      ...prev,
+      workoutTemplates: prev.workoutTemplates.map((template) => {
+        if (template.id !== selectedTemplateId) return template;
+
+        return {
+          ...template,
+          exercises: [
+            ...template.exercises,
+            {
+              exerciseId,
+              sets: 3,
+              reps: "8–10",
+              weight: "",
+            },
+          ],
+        };
+      }),
+    }));
+  };
+
+  const updateTemplateExercise = (exerciseIndex, field, value) => {
+    setData((prev) => ({
+      ...prev,
+      workoutTemplates: prev.workoutTemplates.map((template) => {
+        if (template.id !== selectedTemplateId) return template;
+
+        return {
+          ...template,
+          exercises: template.exercises.map((exercise, index) =>
+            index === exerciseIndex
+              ? {
+                  ...exercise,
+                  [field]: field === "sets" ? Number(value) || 1 : value,
+                }
+              : exercise
+          ),
+        };
+      }),
+    }));
+  };
+
+  const removeExerciseFromTemplate = (exerciseIndex) => {
+    setData((prev) => ({
+      ...prev,
+      workoutTemplates: prev.workoutTemplates.map((template) => {
+        if (template.id !== selectedTemplateId) return template;
+
+        return {
+          ...template,
+          exercises: template.exercises.filter((_, index) => index !== exerciseIndex),
+        };
+      }),
+    }));
+  };
+
+  const deleteTemplate = () => {
+    if (!selectedTemplate) return;
+
+    const isConfirmed = window.confirm(`Удалить сет "${selectedTemplate.title}"?`);
+
+    if (!isConfirmed) return;
+
+    setData((prev) => {
+      const updatedTemplates = prev.workoutTemplates.filter(
+        (template) => template.id !== selectedTemplateId
+      );
+
+      return {
+        ...prev,
+        workoutTemplates: updatedTemplates,
+      };
+    });
+
+    const nextTemplate = data.workoutTemplates.find(
+      (template) => template.id !== selectedTemplateId
+    );
+
+    setSelectedTemplateId(nextTemplate?.id || null);
+  };
+
+  /* =========================
+     Exercise library
+  ========================= */
+
+  const createLibraryExercise = () => {
+    if (!newExerciseName.trim()) return;
+
+    const exercise = {
+      id: createId("exercise"),
+      name: newExerciseName.trim(),
+      muscleGroup: newExerciseGroup.trim() || "Без группы",
+    };
+
+    setData((prev) => ({
+      ...prev,
+      exerciseLibrary: [...(prev.exerciseLibrary || []), exercise],
+    }));
+
+    setNewExerciseName("");
+    setNewExerciseGroup("");
+  };
+
+  /* =========================
+     Notes
+  ========================= */
+
+  const updateDayNote = (note) => {
+    if (!selectedDateKey) return;
+
+    setData((prev) => ({
+      ...prev,
+      dayNotes: {
+        ...(prev.dayNotes || {}),
+        [selectedDateKey]: note,
+      },
+    }));
+  };
+
+  /* =========================
+     Food actions
   ========================= */
 
   const resetFoodForm = () => {
@@ -485,7 +853,7 @@ export default function App() {
   };
 
   /* =========================
-     9. Profile actions
+     Profile
   ========================= */
 
   const updateProfile = (field, value) => {
@@ -499,133 +867,7 @@ export default function App() {
   };
 
   /* =========================
-     10. Workout settings actions
-  ========================= */
-
-  const toggleTrainingDay = (dayNumber) => {
-    setData((prev) => {
-      const isActive = prev.trainingDays.includes(dayNumber);
-
-      return {
-        ...prev,
-        trainingDays: isActive
-          ? prev.trainingDays.filter((item) => item !== dayNumber)
-          : [...prev.trainingDays, dayNumber],
-      };
-    });
-  };
-
-  const updateWorkoutTitle = (title) => {
-    setData((prev) => {
-      const currentWorkout = prev.workouts[settingsDay] || {
-        title: "",
-        exercises: [],
-      };
-
-      return {
-        ...prev,
-        trainingDays: prev.trainingDays.includes(settingsDay)
-          ? prev.trainingDays
-          : [...prev.trainingDays, settingsDay],
-        workouts: {
-          ...prev.workouts,
-          [settingsDay]: {
-            ...currentWorkout,
-            title,
-          },
-        },
-      };
-    });
-  };
-
-  const startEditExercise = (exercise, index) => {
-    setEditingExerciseIndex(index);
-
-    setNewExercise({
-      name: exercise.name,
-      weight: exercise.weight,
-      sets: exercise.sets,
-      reps: exercise.reps,
-    });
-  };
-
-  const deleteExercise = (exerciseIndex) => {
-    setData((prev) => {
-      const currentWorkout = prev.workouts[settingsDay];
-
-      if (!currentWorkout) return prev;
-
-      return {
-        ...prev,
-        workouts: {
-          ...prev.workouts,
-          [settingsDay]: {
-            ...currentWorkout,
-            exercises: currentWorkout.exercises.filter(
-              (_, index) => index !== exerciseIndex
-            ),
-          },
-        },
-      };
-    });
-
-    resetExerciseForm();
-  };
-
-  const saveExercise = () => {
-    if (!newExercise.name.trim()) return;
-
-    setData((prev) => {
-      const currentWorkout = prev.workouts[settingsDay] || {
-        title: "Новая тренировка",
-        exercises: [],
-      };
-
-      const exerciseToSave = {
-        name: newExercise.name.trim(),
-        weight: newExercise.weight.trim() || "без веса",
-        sets: Number(newExercise.sets) || 3,
-        reps: newExercise.reps.trim() || "8–10",
-      };
-
-      const updatedExercises =
-        editingExerciseIndex === null
-          ? [...currentWorkout.exercises, exerciseToSave]
-          : currentWorkout.exercises.map((exercise, index) =>
-              index === editingExerciseIndex ? exerciseToSave : exercise
-            );
-
-      return {
-        ...prev,
-        trainingDays: prev.trainingDays.includes(settingsDay)
-          ? prev.trainingDays
-          : [...prev.trainingDays, settingsDay],
-        workouts: {
-          ...prev.workouts,
-          [settingsDay]: {
-            ...currentWorkout,
-            exercises: updatedExercises,
-          },
-        },
-      };
-    });
-
-    resetExerciseForm();
-  };
-
-  const resetExerciseForm = () => {
-    setNewExercise({
-      name: "",
-      weight: "",
-      sets: 3,
-      reps: "",
-    });
-
-    setEditingExerciseIndex(null);
-  };
-
-  /* =========================
-     11. Render
+     Render
   ========================= */
 
   return (
@@ -637,46 +879,57 @@ export default function App() {
             emptyDays={emptyDays}
             monthName={monthName}
             todayDay={todayDay}
+            isCurrentMonth={isCurrentMonth}
             selectedDay={selectedDay}
             selectedDate={selectedDate}
-            workout={workout}
-            data={data}
-            visibleStreak={visibleStreak}
-            currentYear={currentYear}
-            currentMonth={currentMonth}
             selectedDateKey={selectedDateKey}
             selectedDayPanel={selectedDayPanel}
-            setSelectedDayPanel={setSelectedDayPanel}
+            selectedWorkoutLog={selectedWorkoutLog}
             selectedDayFoodEntries={selectedDayFoodEntries}
-            selectedDayCalories={selectedDayCalories}
-            selectedDayProtein={selectedDayProtein}
-            selectedDayFat={selectedDayFat}
-            selectedDayCarbs={selectedDayCarbs}
+            selectedFoodTotals={selectedFoodTotals}
             selectedDayRemainingCalories={selectedDayRemainingCalories}
+            selectedDayNote={selectedDayNote}
             dailyCalories={dailyCalories}
             dailyProtein={dailyProtein}
             dailyFat={dailyFat}
             dailyCarbs={dailyCarbs}
-            isWorkoutSettingsOpen={isWorkoutSettingsOpen}
-            settingsDay={settingsDay}
-            newExercise={newExercise}
-            editingExerciseIndex={editingExerciseIndex}
+            visibleStreak={visibleStreak}
+            completedWorkoutDates={completedWorkoutDates}
+            workoutTemplates={data.workoutTemplates}
+            exerciseLibrary={data.exerciseLibrary}
+            selectedTemplate={selectedTemplate}
+            selectedTemplateId={selectedTemplateId}
+            isTemplateManagerOpen={isTemplateManagerOpen}
+            newExerciseName={newExerciseName}
+            newExerciseGroup={newExerciseGroup}
+            currentYear={currentYear}
+            currentMonth={currentMonth}
+            changeMonth={changeMonth}
             openDay={openDay}
-            isWorkoutCompleted={isWorkoutCompleted}
-            toggleExerciseSet={toggleExerciseSet}
+            setSelectedDayPanel={setSelectedDayPanel}
+            setIsTemplateManagerOpen={setIsTemplateManagerOpen}
+            createWorkoutForSelectedDay={createWorkoutForSelectedDay}
+            deleteSelectedWorkout={deleteSelectedWorkout}
+            updateWorkoutLogTitle={updateWorkoutLogTitle}
+            updateWorkoutSet={updateWorkoutSet}
+            addSetToExercise={addSetToExercise}
+            removeSetFromExercise={removeSetFromExercise}
+            addExerciseToSelectedWorkout={addExerciseToSelectedWorkout}
+            removeExerciseFromSelectedWorkout={removeExerciseFromSelectedWorkout}
+            getPreviousExerciseInfo={getPreviousExerciseInfo}
             openFoodEditor={openFoodEditor}
-            toggleWorkoutSettings={() =>
-              setIsWorkoutSettingsOpen((prev) => !prev)
-            }
-            closeWorkout={() => setSelectedDay(null)}
-            setSettingsDay={setSettingsDay}
-            setNewExercise={setNewExercise}
-            updateWorkoutTitle={updateWorkoutTitle}
-            toggleTrainingDay={toggleTrainingDay}
-            startEditExercise={startEditExercise}
-            deleteExercise={deleteExercise}
-            saveExercise={saveExercise}
-            resetExerciseForm={resetExerciseForm}
+            updateDayNote={updateDayNote}
+            setSelectedTemplateId={setSelectedTemplateId}
+            createTemplate={createTemplate}
+            updateTemplateTitle={updateTemplateTitle}
+            addExerciseToTemplate={addExerciseToTemplate}
+            updateTemplateExercise={updateTemplateExercise}
+            removeExerciseFromTemplate={removeExerciseFromTemplate}
+            deleteTemplate={deleteTemplate}
+            setNewExerciseName={setNewExerciseName}
+            setNewExerciseGroup={setNewExerciseGroup}
+            createLibraryExercise={createLibraryExercise}
+            closeDay={() => setSelectedDay(null)}
           />
         )}
 
@@ -686,10 +939,10 @@ export default function App() {
             dailyProtein={dailyProtein}
             dailyFat={dailyFat}
             dailyCarbs={dailyCarbs}
-            eatenCalories={eatenCalories}
-            eatenProtein={eatenProtein}
-            eatenFat={eatenFat}
-            eatenCarbs={eatenCarbs}
+            eatenCalories={todayFoodTotals.calories}
+            eatenProtein={todayFoodTotals.protein}
+            eatenFat={todayFoodTotals.fat}
+            eatenCarbs={todayFoodTotals.carbs}
             remainingCalories={remainingCalories}
             foodEntries={todayFoodEntries}
             foodHistory={foodHistory}
@@ -721,7 +974,7 @@ export default function App() {
 }
 
 /* =========================
-   12. Pages
+   Workouts page
 ========================= */
 
 function WorkoutsPage({
@@ -729,44 +982,57 @@ function WorkoutsPage({
   emptyDays,
   monthName,
   todayDay,
+  isCurrentMonth,
   selectedDay,
   selectedDate,
-  workout,
-  data,
-  visibleStreak,
-  currentYear,
-  currentMonth,
   selectedDateKey,
   selectedDayPanel,
-  setSelectedDayPanel,
+  selectedWorkoutLog,
   selectedDayFoodEntries,
-  selectedDayCalories,
-  selectedDayProtein,
-  selectedDayFat,
-  selectedDayCarbs,
+  selectedFoodTotals,
   selectedDayRemainingCalories,
+  selectedDayNote,
   dailyCalories,
   dailyProtein,
   dailyFat,
   dailyCarbs,
-  isWorkoutSettingsOpen,
-  settingsDay,
-  newExercise,
-  editingExerciseIndex,
+  visibleStreak,
+  completedWorkoutDates,
+  workoutTemplates,
+  exerciseLibrary,
+  selectedTemplate,
+  selectedTemplateId,
+  isTemplateManagerOpen,
+  newExerciseName,
+  newExerciseGroup,
+  currentYear,
+  currentMonth,
+  changeMonth,
   openDay,
-  isWorkoutCompleted,
-  toggleExerciseSet,
+  setSelectedDayPanel,
+  setIsTemplateManagerOpen,
+  createWorkoutForSelectedDay,
+  deleteSelectedWorkout,
+  updateWorkoutLogTitle,
+  updateWorkoutSet,
+  addSetToExercise,
+  removeSetFromExercise,
+  addExerciseToSelectedWorkout,
+  removeExerciseFromSelectedWorkout,
+  getPreviousExerciseInfo,
   openFoodEditor,
-  toggleWorkoutSettings,
-  closeWorkout,
-  setSettingsDay,
-  setNewExercise,
-  updateWorkoutTitle,
-  toggleTrainingDay,
-  startEditExercise,
-  deleteExercise,
-  saveExercise,
-  resetExerciseForm,
+  updateDayNote,
+  setSelectedTemplateId,
+  createTemplate,
+  updateTemplateTitle,
+  addExerciseToTemplate,
+  updateTemplateExercise,
+  removeExerciseFromTemplate,
+  deleteTemplate,
+  setNewExerciseName,
+  setNewExerciseGroup,
+  createLibraryExercise,
+  closeDay,
 }) {
   return (
     <>
@@ -780,30 +1046,35 @@ function WorkoutsPage({
           {visibleStreak && (
             <div className="streak-line">
               <strong>{visibleStreak}</strong>
-              <span>streak</span>
+              <span>done</span>
             </div>
           )}
 
           <button
             type="button"
-            className={`workout-editor-button ${
-              isWorkoutSettingsOpen ? "active" : ""
-            }`}
-            onClick={toggleWorkoutSettings}
+            className={`workout-editor-button ${isTemplateManagerOpen ? "active" : ""}`}
+            onClick={() => setIsTemplateManagerOpen((prev) => !prev)}
           >
-            🏋️
-            <span>{isWorkoutSettingsOpen ? "Скрыть" : "Настроить"}</span>
+            Сеты
           </button>
         </div>
       </header>
 
       <section className="calendar-card">
         <div className="month-row">
+          <button type="button" onClick={() => changeMonth(-1)}>
+            ←
+          </button>
+
           <span>{monthName}</span>
+
+          <button type="button" onClick={() => changeMonth(1)}>
+            →
+          </button>
         </div>
 
         <div className="calendar-weekdays">
-          {calendarWeekDays.map((day, index) => (
+          {["M", "T", "W", "T", "F", "S", "S"].map((day, index) => (
             <span key={`${day}-${index}`}>{day}</span>
           ))}
         </div>
@@ -814,20 +1085,26 @@ function WorkoutsPage({
           ))}
 
           {days.map((day) => {
-            const date = new Date(currentYear, currentMonth, day);
-            const dayOfWeek = getDayOfWeek(date);
+            const dateKey = createDateKey(currentYear, currentMonth, day);
+            const hasWorkout = Boolean(selectedWorkoutLog?.date === dateKey);
+            const hasAnyWorkout = Boolean(
+              completedWorkoutDates.includes(dateKey) ||
+                Object.prototype.hasOwnProperty.call(
+                  JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}")?.workoutLogs || {},
+                  dateKey
+                )
+            );
 
-            const isTraining = data.trainingDays.includes(dayOfWeek);
-            const isCompleted = isWorkoutCompleted(day);
             const isSelected = selectedDay === day;
-            const isToday = day === todayDay;
+            const isToday = isCurrentMonth && day === todayDay;
+            const isCompleted = completedWorkoutDates.includes(dateKey);
 
             return (
               <button
                 key={day}
                 className={[
                   "day-circle",
-                  isTraining ? "active" : "",
+                  hasAnyWorkout ? "active" : "",
                   isCompleted ? "completed" : "",
                   isSelected ? "selected" : "",
                   isToday ? "today" : "",
@@ -841,25 +1118,28 @@ function WorkoutsPage({
         </div>
       </section>
 
-      {isWorkoutSettingsOpen && (
-        <WorkoutSettingsPanel
-          data={data}
-          settingsDay={settingsDay}
-          newExercise={newExercise}
-          editingExerciseIndex={editingExerciseIndex}
-          setSettingsDay={setSettingsDay}
-          setNewExercise={setNewExercise}
-          updateWorkoutTitle={updateWorkoutTitle}
-          toggleTrainingDay={toggleTrainingDay}
-          startEditExercise={startEditExercise}
-          deleteExercise={deleteExercise}
-          saveExercise={saveExercise}
-          resetExerciseForm={resetExerciseForm}
-          closeSettings={toggleWorkoutSettings}
+      {isTemplateManagerOpen && (
+        <TemplateManager
+          workoutTemplates={workoutTemplates}
+          exerciseLibrary={exerciseLibrary}
+          selectedTemplate={selectedTemplate}
+          selectedTemplateId={selectedTemplateId}
+          newExerciseName={newExerciseName}
+          newExerciseGroup={newExerciseGroup}
+          setSelectedTemplateId={setSelectedTemplateId}
+          createTemplate={createTemplate}
+          updateTemplateTitle={updateTemplateTitle}
+          addExerciseToTemplate={addExerciseToTemplate}
+          updateTemplateExercise={updateTemplateExercise}
+          removeExerciseFromTemplate={removeExerciseFromTemplate}
+          deleteTemplate={deleteTemplate}
+          setNewExerciseName={setNewExerciseName}
+          setNewExerciseGroup={setNewExerciseGroup}
+          createLibraryExercise={createLibraryExercise}
         />
       )}
 
-      {selectedDay && !isWorkoutSettingsOpen && (
+      {selectedDay && !isTemplateManagerOpen && (
         <section className="workout-panel">
           <div className="panel-top">
             <div>
@@ -871,156 +1151,93 @@ function WorkoutsPage({
                 })}
               </p>
 
-              <h2>{selectedDayPanel === "workout" ? "Тренировка" : "Еда"}</h2>
+              <h2>
+                {selectedWorkoutLog ? selectedWorkoutLog.title : "Новая тренировка"}
+              </h2>
             </div>
 
-            <button className="icon-button" onClick={closeWorkout}>
+            <button className="icon-button" onClick={closeDay}>
               ×
             </button>
           </div>
 
-          <div className="day-panel-tabs">
-            <button
-              type="button"
-              className={selectedDayPanel === "workout" ? "active" : ""}
-              onClick={() => setSelectedDayPanel("workout")}
-            >
-              Тренировка
-            </button>
-
-            <button
-              type="button"
-              className={selectedDayPanel === "food" ? "active" : ""}
-              onClick={() => setSelectedDayPanel("food")}
-            >
-              Еда
-            </button>
-          </div>
-
-          {selectedDayPanel === "workout" && (
+          {!selectedWorkoutLog ? (
+            <CreateWorkoutPanel
+              workoutTemplates={workoutTemplates}
+              createWorkoutForSelectedDay={createWorkoutForSelectedDay}
+            />
+          ) : (
             <>
-              {workout ? (
-                <>
-                  <h3 className="day-panel-title">{workout.title}</h3>
+              <div className="day-panel-tabs three">
+                <button
+                  type="button"
+                  className={selectedDayPanel === "workout" ? "active" : ""}
+                  onClick={() => setSelectedDayPanel("workout")}
+                >
+                  Тренировка
+                </button>
 
-                  {workout.exercises.map((exercise, index) => {
-                    const setKey = createSetKey(selectedDateKey, index);
-                    const doneSets = data.completedSets?.[setKey] || [];
+                <button
+                  type="button"
+                  className={selectedDayPanel === "food" ? "active" : ""}
+                  onClick={() => setSelectedDayPanel("food")}
+                >
+                  Еда
+                </button>
 
-                    return (
-                      <ExerciseCard
-                        key={`${exercise.name}-${index}`}
-                        exercise={exercise}
-                        doneSets={doneSets}
-                        onToggleSet={(setIndex) =>
-                          toggleExerciseSet(index, setIndex)
-                        }
-                      />
-                    );
-                  })}
+                <button
+                  type="button"
+                  className={selectedDayPanel === "note" ? "active" : ""}
+                  onClick={() => setSelectedDayPanel("note")}
+                >
+                  Заметка
+                </button>
+              </div>
 
-                  <p
-                    className={`workout-status ${
-                      isWorkoutCompleted(selectedDay) ? "completed" : ""
-                    }`}
-                  >
-                    {isWorkoutCompleted(selectedDay)
-                      ? "✓ Тренировка закрыта"
-                      : "Отметь все подходы, чтобы закрыть тренировку"}
+              {selectedDayPanel === "workout" && (
+                <WorkoutLogView
+                  workoutLog={selectedWorkoutLog}
+                  exerciseLibrary={exerciseLibrary}
+                  updateWorkoutLogTitle={updateWorkoutLogTitle}
+                  updateWorkoutSet={updateWorkoutSet}
+                  addSetToExercise={addSetToExercise}
+                  removeSetFromExercise={removeSetFromExercise}
+                  addExerciseToSelectedWorkout={addExerciseToSelectedWorkout}
+                  removeExerciseFromSelectedWorkout={removeExerciseFromSelectedWorkout}
+                  deleteSelectedWorkout={deleteSelectedWorkout}
+                  getPreviousExerciseInfo={getPreviousExerciseInfo}
+                />
+              )}
+
+              {selectedDayPanel === "food" && (
+                <DayFoodPanel
+                  entries={selectedDayFoodEntries}
+                  totals={selectedFoodTotals}
+                  dailyCalories={dailyCalories}
+                  dailyProtein={dailyProtein}
+                  dailyFat={dailyFat}
+                  dailyCarbs={dailyCarbs}
+                  remainingCalories={selectedDayRemainingCalories}
+                  openFoodEditor={openFoodEditor}
+                />
+              )}
+
+              {selectedDayPanel === "note" && (
+                <div className="day-note-panel">
+                  <p className="eyebrow">Заметка дня</p>
+
+                  <textarea
+                    value={selectedDayNote}
+                    onChange={(event) => updateDayNote(event.target.value)}
+                    placeholder="Самочувствие, настроение, сложность тренировки..."
+                  />
+
+                  <p className="day-food-hint">
+                    Заметка сохраняется автоматически для выбранной даты.
                   </p>
-                </>
-              ) : (
-                <p className="profile-hint">
-                  На этот день тренировка не запланирована.
-                </p>
+                </div>
               )}
             </>
-          )}
-
-          {selectedDayPanel === "food" && (
-            <div className="day-food-panel">
-              <div className="day-food-summary">
-                <p className="eyebrow">Калории</p>
-
-                <div className="calories-main small">
-                  <strong>{selectedDayCalories}</strong>
-                  <span>
-                    {dailyCalories ? `/ ${dailyCalories} ккал` : "ккал"}
-                  </span>
-                </div>
-
-                {dailyCalories && (
-                  <>
-                    <div className="food-progress compact">
-                      <div
-                        style={{
-                          width: `${Math.min(
-                            (selectedDayCalories / dailyCalories) * 100,
-                            100
-                          )}%`,
-                        }}
-                      />
-                    </div>
-
-                    <p className="food-note">
-                      Осталось: {selectedDayRemainingCalories} ккал
-                    </p>
-                  </>
-                )}
-              </div>
-
-              <div className="macro-grid">
-                <div>
-                  <span>Белки</span>
-                  <strong>
-                    {selectedDayProtein}/{dailyProtein || 0} г
-                  </strong>
-                </div>
-
-                <div>
-                  <span>Жиры</span>
-                  <strong>
-                    {selectedDayFat}/{dailyFat || 0} г
-                  </strong>
-                </div>
-
-                <div>
-                  <span>Углеводы</span>
-                  <strong>
-                    {selectedDayCarbs}/{dailyCarbs || 0} г
-                  </strong>
-                </div>
-              </div>
-
-              <p className="day-food-hint">
-                Нажми на блюдо, чтобы редактировать.
-              </p>
-
-              {selectedDayFoodEntries.length > 0 ? (
-                <div className="food-list">
-                  {selectedDayFoodEntries.map((item) => (
-                    <div className="food-item" key={item.id}>
-                      <button
-                        type="button"
-                        className="food-edit-area"
-                        onClick={() => openFoodEditor(item)}
-                      >
-                        <strong>{item.name}</strong>
-
-                        <p>
-                          {item.calories} ккал · Б {item.protein} · Ж{" "}
-                          {item.fat} · У {item.carbs}
-                        </p>
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="profile-hint">
-                  На этот день еда ещё не добавлена.
-                </p>
-              )}
-            </div>
           )}
         </section>
       )}
@@ -1028,128 +1245,385 @@ function WorkoutsPage({
   );
 }
 
-function WorkoutSettingsPanel({
-  data,
-  settingsDay,
-  newExercise,
-  editingExerciseIndex,
-  setSettingsDay,
-  setNewExercise,
-  updateWorkoutTitle,
-  toggleTrainingDay,
-  startEditExercise,
-  deleteExercise,
-  saveExercise,
-  resetExerciseForm,
-  closeSettings,
-}) {
-  const selectedWorkout = data.workouts[settingsDay];
+/* =========================
+   Workout components
+========================= */
 
+function CreateWorkoutPanel({ workoutTemplates, createWorkoutForSelectedDay }) {
   return (
-    <div className="workout-settings-panel">
-      <section className="settings-card">
-        <div className="panel-top">
-          <div>
-            <p className="eyebrow">Редактор</p>
-            <h2>Мои тренировки</h2>
-          </div>
+    <div className="create-workout-panel">
+      <p className="settings-note">
+        На этот день ещё нет тренировки. Создай её из сета или начни пустую.
+      </p>
 
-          <button className="icon-button" onClick={closeSettings}>
-            ×
+      <div className="template-select-list">
+        {workoutTemplates.map((template) => (
+          <button
+            type="button"
+            key={template.id}
+            onClick={() => createWorkoutForSelectedDay(template.id)}
+          >
+            <strong>{template.title}</strong>
+            <span>{template.exercises.length} упражнений</span>
           </button>
+        ))}
+      </div>
+
+      <button
+        type="button"
+        className="secondary-button"
+        onClick={() => createWorkoutForSelectedDay(null)}
+      >
+        Создать пустую тренировку
+      </button>
+    </div>
+  );
+}
+
+function WorkoutLogView({
+  workoutLog,
+  exerciseLibrary,
+  updateWorkoutLogTitle,
+  updateWorkoutSet,
+  addSetToExercise,
+  removeSetFromExercise,
+  addExerciseToSelectedWorkout,
+  removeExerciseFromSelectedWorkout,
+  deleteSelectedWorkout,
+  getPreviousExerciseInfo,
+}) {
+  return (
+    <div>
+      <div className="workout-title-row">
+        <span>Название тренировки</span>
+
+        <input
+          type="text"
+          value={workoutLog.title}
+          onChange={(event) => updateWorkoutLogTitle(event.target.value)}
+        />
+      </div>
+
+      <div className="logged-exercises-list">
+        {workoutLog.exercises.length > 0 ? (
+          workoutLog.exercises.map((exercise, exerciseIndex) => {
+            const previousInfo = getPreviousExerciseInfo(exercise.exerciseId);
+
+            return (
+              <article className="logged-exercise-card" key={exercise.id || exerciseIndex}>
+                <div className="logged-exercise-top">
+                  <div>
+                    <h3>{exercise.name}</h3>
+                    <p>{exercise.muscleGroup || "Без группы"}</p>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="delete-exercise-button"
+                    onClick={() => removeExerciseFromSelectedWorkout(exerciseIndex)}
+                  >
+                    ×
+                  </button>
+                </div>
+
+                {previousInfo && (
+                  <p className="previous-exercise-info">
+                    Прошлый раз:{" "}
+                    {previousInfo.exercise.sets
+                      .map((set) => `${set.weight || "—"} × ${set.reps || "—"}`)
+                      .join(" / ")}
+                  </p>
+                )}
+
+                <div className="sets-table">
+                  {exercise.sets.map((set, setIndex) => (
+                    <div className="set-row" key={`${exerciseIndex}-${setIndex}`}>
+                      <span>{setIndex + 1}</span>
+
+                      <input
+                        type="text"
+                        value={set.weight}
+                        onChange={(event) =>
+                          updateWorkoutSet(
+                            exerciseIndex,
+                            setIndex,
+                            "weight",
+                            event.target.value
+                          )
+                        }
+                        placeholder="вес"
+                      />
+
+                      <input
+                        type="text"
+                        value={set.reps}
+                        onChange={(event) =>
+                          updateWorkoutSet(
+                            exerciseIndex,
+                            setIndex,
+                            "reps",
+                            event.target.value
+                          )
+                        }
+                        placeholder="повт."
+                      />
+
+                      <button
+                        type="button"
+                        className={set.done ? "set-done-button done" : "set-done-button"}
+                        onClick={() =>
+                          updateWorkoutSet(exerciseIndex, setIndex, "done", !set.done)
+                        }
+                      >
+                        ✓
+                      </button>
+
+                      <button
+                        type="button"
+                        className="set-remove-button"
+                        onClick={() => removeSetFromExercise(exerciseIndex, setIndex)}
+                      >
+                        −
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => addSetToExercise(exerciseIndex)}
+                >
+                  Добавить подход
+                </button>
+              </article>
+            );
+          })
+        ) : (
+          <p className="profile-hint">В этой тренировке пока нет упражнений.</p>
+        )}
+      </div>
+
+      <div className="add-log-exercise">
+        <p className="eyebrow">Добавить упражнение</p>
+
+        <select
+          defaultValue=""
+          onChange={(event) => {
+            addExerciseToSelectedWorkout(event.target.value);
+            event.target.value = "";
+          }}
+        >
+          <option value="" disabled>
+            Выбери упражнение
+          </option>
+
+          {exerciseLibrary.map((exercise) => (
+            <option key={exercise.id} value={exercise.id}>
+              {exercise.name} · {exercise.muscleGroup}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <button
+        type="button"
+        className="danger-button"
+        onClick={deleteSelectedWorkout}
+      >
+        Удалить тренировку дня
+      </button>
+    </div>
+  );
+}
+
+function DayFoodPanel({
+  entries,
+  totals,
+  dailyCalories,
+  dailyProtein,
+  dailyFat,
+  dailyCarbs,
+  remainingCalories,
+  openFoodEditor,
+}) {
+  return (
+    <div className="day-food-panel">
+      <div className="day-food-summary">
+        <p className="eyebrow">Калории</p>
+
+        <div className="calories-main small">
+          <strong>{totals.calories}</strong>
+          <span>{dailyCalories ? `/ ${dailyCalories} ккал` : "ккал"}</span>
         </div>
 
-        <div className="week-row">
-  {weekDaysShort.map((dayName, index) => {
-    const dayNumber = index + 1;
-    const isActive = data.trainingDays.includes(dayNumber);
-    const isSelected = settingsDay === dayNumber;
-
-    return (
-      <button
-        key={dayName}
-        type="button"
-        className={[
-          "week-day",
-          isActive ? "active" : "",
-          isSelected ? "selected" : "",
-        ].join(" ")}
-        onClick={() => setSettingsDay(dayNumber)}
-      >
-        {dayName}
-      </button>
-    );
-  })}
-</div>
-
-<div className="training-day-toggle">
-  <div>
-    <span>Тренировочный день</span>
-    <strong>
-      {data.trainingDays.includes(settingsDay) ? "Включён" : "Выключен"}
-    </strong>
-  </div>
-
-  <button
-    type="button"
-    className={data.trainingDays.includes(settingsDay) ? "active" : ""}
-    onClick={() => toggleTrainingDay(settingsDay)}
-  >
-    {data.trainingDays.includes(settingsDay) ? "Выключить" : "Включить"}
-  </button>
-</div>
-
-<p className="settings-note">
-  Выбери день недели, затем включи или выключи тренировку для этого дня.
-</p>
-      </section>
-
-      <section className="settings-card day-settings-card">
-        <p className="eyebrow">Выбранный день</p>
-        <h2>{weekDaysFull[settingsDay - 1]}</h2>
-
-        {selectedWorkout ? (
+        {dailyCalories && (
           <>
-            <div className="workout-title-row">
-              <span>Тренировка</span>
-
-              <input
-                type="text"
-                value={selectedWorkout.title || ""}
-                onChange={(event) => updateWorkoutTitle(event.target.value)}
-                placeholder="Название тренировки"
+            <div className="food-progress compact">
+              <div
+                style={{
+                  width: `${Math.min((totals.calories / dailyCalories) * 100, 100)}%`,
+                }}
               />
             </div>
 
-            <div className="settings-exercises-list">
-              {selectedWorkout.exercises.map((exercise, index) => {
-                const isEditing = editingExerciseIndex === index;
+            <p className="food-note">Осталось: {remainingCalories} ккал</p>
+          </>
+        )}
+      </div>
+
+      <div className="macro-grid">
+        <div>
+          <span>Белки</span>
+          <strong>{totals.protein}/{dailyProtein || 0} г</strong>
+        </div>
+
+        <div>
+          <span>Жиры</span>
+          <strong>{totals.fat}/{dailyFat || 0} г</strong>
+        </div>
+
+        <div>
+          <span>Углеводы</span>
+          <strong>{totals.carbs}/{dailyCarbs || 0} г</strong>
+        </div>
+      </div>
+
+      <p className="day-food-hint">Нажми на блюдо, чтобы редактировать.</p>
+
+      {entries.length > 0 ? (
+        <div className="food-list">
+          {entries.map((item) => (
+            <div className="food-item" key={item.id}>
+              <button
+                type="button"
+                className="food-edit-area"
+                onClick={() => openFoodEditor(item)}
+              >
+                <strong>{item.name}</strong>
+
+                <p>
+                  {item.calories} ккал · Б {item.protein} · Ж {item.fat} · У{" "}
+                  {item.carbs}
+                </p>
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="profile-hint">На этот день еда ещё не добавлена.</p>
+      )}
+    </div>
+  );
+}
+
+/* =========================
+   Template manager
+========================= */
+
+function TemplateManager({
+  workoutTemplates,
+  exerciseLibrary,
+  selectedTemplate,
+  selectedTemplateId,
+  newExerciseName,
+  newExerciseGroup,
+  setSelectedTemplateId,
+  createTemplate,
+  updateTemplateTitle,
+  addExerciseToTemplate,
+  updateTemplateExercise,
+  removeExerciseFromTemplate,
+  deleteTemplate,
+  setNewExerciseName,
+  setNewExerciseGroup,
+  createLibraryExercise,
+}) {
+  return (
+    <div className="template-manager">
+      <section className="settings-card">
+        <div className="panel-top">
+          <div>
+            <p className="eyebrow">Сеты</p>
+            <h2>Шаблоны тренировок</h2>
+          </div>
+
+          <button type="button" className="primary-mini-button" onClick={createTemplate}>
+            +
+          </button>
+        </div>
+
+        <div className="template-tabs">
+          {workoutTemplates.map((template) => (
+            <button
+              key={template.id}
+              type="button"
+              className={selectedTemplateId === template.id ? "active" : ""}
+              onClick={() => setSelectedTemplateId(template.id)}
+            >
+              {template.title}
+            </button>
+          ))}
+        </div>
+
+        {selectedTemplate ? (
+          <>
+            <div className="workout-title-row">
+              <span>Название сета</span>
+
+              <input
+                type="text"
+                value={selectedTemplate.title}
+                onChange={(event) => updateTemplateTitle(event.target.value)}
+              />
+            </div>
+
+            <div className="template-exercises-list">
+              {selectedTemplate.exercises.map((templateExercise, index) => {
+                const libraryExercise = exerciseLibrary.find(
+                  (exercise) => exercise.id === templateExercise.exerciseId
+                );
 
                 return (
-                  <div
-                    className={`settings-exercise-item ${
-                      isEditing ? "editing" : ""
-                    }`}
-                    key={`${exercise.name}-${index}`}
-                  >
-                    <button
-                      type="button"
-                      className="exercise-edit-area"
-                      onClick={() => startEditExercise(exercise, index)}
-                    >
-                      <strong>{exercise.name}</strong>
+                  <div className="template-exercise-item" key={`${templateExercise.exerciseId}-${index}`}>
+                    <div className="template-exercise-name">
+                      <strong>{libraryExercise?.name || "Упражнение"}</strong>
+                      <p>{libraryExercise?.muscleGroup || "Без группы"}</p>
+                    </div>
 
-                      <p>
-                        {exercise.weight} · {exercise.sets} подхода ·{" "}
-                        {exercise.reps}
-                      </p>
-                    </button>
+                    <div className="template-exercise-grid">
+                      <input
+                        type="text"
+                        value={templateExercise.weight}
+                        onChange={(event) =>
+                          updateTemplateExercise(index, "weight", event.target.value)
+                        }
+                        placeholder="вес"
+                      />
+
+                      <input
+                        type="number"
+                        value={templateExercise.sets}
+                        onChange={(event) =>
+                          updateTemplateExercise(index, "sets", event.target.value)
+                        }
+                        placeholder="подх."
+                      />
+
+                      <input
+                        type="text"
+                        value={templateExercise.reps}
+                        onChange={(event) =>
+                          updateTemplateExercise(index, "reps", event.target.value)
+                        }
+                        placeholder="повт."
+                      />
+                    </div>
 
                     <button
                       type="button"
                       className="delete-exercise-button"
-                      onClick={() => deleteExercise(index)}
-                      aria-label={`Удалить ${exercise.name}`}
+                      onClick={() => removeExerciseFromTemplate(index)}
                     >
                       ×
                     </button>
@@ -1157,24 +1631,78 @@ function WorkoutSettingsPanel({
                 );
               })}
             </div>
+
+            <div className="add-log-exercise">
+              <p className="eyebrow">Добавить в сет</p>
+
+              <select
+                defaultValue=""
+                onChange={(event) => {
+                  addExerciseToTemplate(event.target.value);
+                  event.target.value = "";
+                }}
+              >
+                <option value="" disabled>
+                  Выбери упражнение
+                </option>
+
+                {exerciseLibrary.map((exercise) => (
+                  <option key={exercise.id} value={exercise.id}>
+                    {exercise.name} · {exercise.muscleGroup}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <button type="button" className="danger-button" onClick={deleteTemplate}>
+              Удалить сет
+            </button>
           </>
         ) : (
-          <p className="settings-note">
-            Для этого дня пока нет тренировки. Добавь упражнение ниже.
-          </p>
+          <p className="profile-hint">Создай первый сет тренировок.</p>
         )}
+      </section>
 
-        <ExerciseForm
-          newExercise={newExercise}
-          editingExerciseIndex={editingExerciseIndex}
-          setNewExercise={setNewExercise}
-          saveExercise={saveExercise}
-          resetExerciseForm={resetExerciseForm}
-        />
+      <section className="settings-card">
+        <p className="eyebrow">Библиотека</p>
+        <h2>Упражнения</h2>
+
+        <div className="library-list">
+          {exerciseLibrary.map((exercise) => (
+            <div className="library-item" key={exercise.id}>
+              <strong>{exercise.name}</strong>
+              <span>{exercise.muscleGroup}</span>
+            </div>
+          ))}
+        </div>
+
+        <div className="library-form">
+          <input
+            type="text"
+            placeholder="Новое упражнение"
+            value={newExerciseName}
+            onChange={(event) => setNewExerciseName(event.target.value)}
+          />
+
+          <input
+            type="text"
+            placeholder="Группа мышц"
+            value={newExerciseGroup}
+            onChange={(event) => setNewExerciseGroup(event.target.value)}
+          />
+
+          <button type="button" className="primary-button" onClick={createLibraryExercise}>
+            Добавить упражнение
+          </button>
+        </div>
       </section>
     </div>
   );
 }
+
+/* =========================
+   Food page
+========================= */
 
 function FoodPage({
   dailyCalories,
@@ -1219,10 +1747,7 @@ function FoodPage({
             <div className="food-progress">
               <div
                 style={{
-                  width: `${Math.min(
-                    (eatenCalories / dailyCalories) * 100,
-                    100
-                  )}%`,
+                  width: `${Math.min((eatenCalories / dailyCalories) * 100, 100)}%`,
                 }}
               />
             </div>
@@ -1232,23 +1757,17 @@ function FoodPage({
             <div className="macro-grid">
               <div>
                 <span>Белки</span>
-                <strong>
-                  {eatenProtein}/{dailyProtein} г
-                </strong>
+                <strong>{eatenProtein}/{dailyProtein} г</strong>
               </div>
 
               <div>
                 <span>Жиры</span>
-                <strong>
-                  {eatenFat}/{dailyFat} г
-                </strong>
+                <strong>{eatenFat}/{dailyFat} г</strong>
               </div>
 
               <div>
                 <span>Углеводы</span>
-                <strong>
-                  {eatenCarbs}/{dailyCarbs} г
-                </strong>
+                <strong>{eatenCarbs}/{dailyCarbs} г</strong>
               </div>
             </div>
           </>
@@ -1270,10 +1789,7 @@ function FoodPage({
             placeholder="Название"
             value={newFood.name}
             onChange={(event) =>
-              setNewFood((prev) => ({
-                ...prev,
-                name: event.target.value,
-              }))
+              setNewFood((prev) => ({ ...prev, name: event.target.value }))
             }
           />
 
@@ -1282,10 +1798,7 @@ function FoodPage({
             placeholder="Калории"
             value={newFood.calories}
             onChange={(event) =>
-              setNewFood((prev) => ({
-                ...prev,
-                calories: event.target.value,
-              }))
+              setNewFood((prev) => ({ ...prev, calories: event.target.value }))
             }
           />
 
@@ -1295,10 +1808,7 @@ function FoodPage({
               placeholder="Белки"
               value={newFood.protein}
               onChange={(event) =>
-                setNewFood((prev) => ({
-                  ...prev,
-                  protein: event.target.value,
-                }))
+                setNewFood((prev) => ({ ...prev, protein: event.target.value }))
               }
             />
 
@@ -1307,10 +1817,7 @@ function FoodPage({
               placeholder="Жиры"
               value={newFood.fat}
               onChange={(event) =>
-                setNewFood((prev) => ({
-                  ...prev,
-                  fat: event.target.value,
-                }))
+                setNewFood((prev) => ({ ...prev, fat: event.target.value }))
               }
             />
           </div>
@@ -1320,27 +1827,16 @@ function FoodPage({
             placeholder="Углеводы"
             value={newFood.carbs}
             onChange={(event) =>
-              setNewFood((prev) => ({
-                ...prev,
-                carbs: event.target.value,
-              }))
+              setNewFood((prev) => ({ ...prev, carbs: event.target.value }))
             }
           />
 
-          <button
-            type="button"
-            className="primary-button"
-            onClick={addFoodEntry}
-          >
+          <button type="button" className="primary-button" onClick={addFoodEntry}>
             {editingFoodId === null ? "Добавить" : "Сохранить"}
           </button>
 
           {editingFoodId !== null && (
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={resetFoodForm}
-            >
+            <button type="button" className="secondary-button" onClick={resetFoodForm}>
               Отменить редактирование
             </button>
           )}
@@ -1354,9 +1850,7 @@ function FoodPage({
           <div className="food-list">
             {foodEntries.map((item) => (
               <div
-                className={`food-item ${
-                  editingFoodId === item.id ? "editing" : ""
-                }`}
+                className={`food-item ${editingFoodId === item.id ? "editing" : ""}`}
                 key={item.id}
               >
                 <button
@@ -1376,7 +1870,6 @@ function FoodPage({
                   type="button"
                   className="delete-exercise-button"
                   onClick={() => deleteFoodEntry(item.id)}
-                  aria-label={`Удалить ${item.name}`}
                 >
                   ×
                 </button>
@@ -1403,9 +1896,7 @@ function FoodPage({
                     })}
                   </strong>
 
-                  <p>
-                    Б {day.protein} · Ж {day.fat} · У {day.carbs}
-                  </p>
+                  <p>Б {day.protein} · Ж {day.fat} · У {day.carbs}</p>
                 </div>
 
                 <span>{day.calories} ккал</span>
@@ -1419,6 +1910,10 @@ function FoodPage({
     </>
   );
 }
+
+/* =========================
+   Profile / Settings / Nav
+========================= */
 
 function ProfilePage({ profile, bmi, bmiStatus, updateProfile }) {
   return (
@@ -1441,9 +1936,7 @@ function ProfilePage({ profile, bmi, bmiStatus, updateProfile }) {
               <input
                 type="number"
                 value={profile?.weight || ""}
-                onChange={(event) =>
-                  updateProfile("weight", event.target.value)
-                }
+                onChange={(event) => updateProfile("weight", event.target.value)}
                 placeholder="75"
               />
 
@@ -1458,9 +1951,7 @@ function ProfilePage({ profile, bmi, bmiStatus, updateProfile }) {
               <input
                 type="number"
                 value={profile?.height || ""}
-                onChange={(event) =>
-                  updateProfile("height", event.target.value)
-                }
+                onChange={(event) => updateProfile("height", event.target.value)}
                 placeholder="180"
               />
 
@@ -1509,9 +2000,7 @@ function ProfilePage({ profile, bmi, bmiStatus, updateProfile }) {
             <span>{bmiStatus}</span>
           </div>
         ) : (
-          <p className="profile-hint">
-            Укажи вес и рост, чтобы рассчитать ИМТ.
-          </p>
+          <p className="profile-hint">Укажи вес и рост, чтобы рассчитать ИМТ.</p>
         )}
       </section>
     </>
@@ -1529,135 +2018,20 @@ function SettingsPage() {
       </header>
 
       <section className="settings-card">
-        <p className="eyebrow">Mini App</p>
-        <h2>Параметры приложения</h2>
+        <p className="eyebrow">Приложение</p>
+        <h2>FureZ Tracker</h2>
 
         <div className="settings-list">
-
-          
-
-         <div className="settings-row">
-  <div>
-    <strong>Версия</strong>
-    <p>0.1.0</p>
-    <span className="made-by">Made with love by FureZ</span>
-  </div>
-</div>
+          <div className="settings-row">
+            <div>
+              <strong>Версия</strong>
+              <p>0.2.0</p>
+              <span className="made-by">Made with love by FureZ</span>
+            </div>
           </div>
+        </div>
       </section>
-
     </>
-  );
-}
-
-/* =========================
-   13. Small components
-========================= */
-
-function ExerciseCard({ exercise, doneSets, onToggleSet }) {
-  return (
-    <article className="exercise-card">
-      <div>
-        <h3>{exercise.name}</h3>
-
-        <p>
-          {exercise.weight} · {exercise.sets} подхода · {exercise.reps}
-        </p>
-      </div>
-
-      <div className="sets-row">
-        {Array.from({ length: exercise.sets }, (_, index) => (
-          <button
-            key={index}
-            className={`set-circle ${doneSets.includes(index) ? "done" : ""}`}
-            onClick={() => onToggleSet(index)}
-            aria-label={`Подход ${index + 1}`}
-          />
-        ))}
-      </div>
-    </article>
-  );
-}
-
-function ExerciseForm({
-  newExercise,
-  editingExerciseIndex,
-  setNewExercise,
-  saveExercise,
-  resetExerciseForm,
-}) {
-  return (
-    <div className="add-exercise-form">
-      <h3>
-        {editingExerciseIndex === null
-          ? "Добавить упражнение"
-          : "Редактировать упражнение"}
-      </h3>
-
-      <input
-        type="text"
-        placeholder="Название"
-        value={newExercise.name}
-        onChange={(event) =>
-          setNewExercise((prev) => ({
-            ...prev,
-            name: event.target.value,
-          }))
-        }
-      />
-
-      <div className="form-grid">
-        <input
-          type="text"
-          placeholder="Вес"
-          value={newExercise.weight}
-          onChange={(event) =>
-            setNewExercise((prev) => ({
-              ...prev,
-              weight: event.target.value,
-            }))
-          }
-        />
-
-        <input
-          type="number"
-          placeholder="Подходы"
-          value={newExercise.sets}
-          onChange={(event) =>
-            setNewExercise((prev) => ({
-              ...prev,
-              sets: event.target.value,
-            }))
-          }
-        />
-      </div>
-
-      <input
-        type="text"
-        placeholder="Повторы, например 8–10"
-        value={newExercise.reps}
-        onChange={(event) =>
-          setNewExercise((prev) => ({
-            ...prev,
-            reps: event.target.value,
-          }))
-        }
-      />
-
-      <button type="button" className="primary-button" onClick={saveExercise}>
-        {editingExerciseIndex === null ? "Добавить" : "Сохранить"}
-      </button>
-
-      {editingExerciseIndex !== null && (
-        <button
-          type="button"
-          className="secondary-button"
-          onClick={resetExerciseForm}
-        >
-          Отменить редактирование
-        </button>
-      )}
-    </div>
   );
 }
 
