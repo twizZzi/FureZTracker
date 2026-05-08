@@ -202,8 +202,7 @@ p {
   border-color: #fff3b0;
 }
 
-.workout-editor-button,
-.primary-mini-button {
+.workout-editor-button {
   height: 42px;
   padding: 0 14px;
   border: 0;
@@ -212,6 +211,42 @@ p {
   color: #ffffff;
   font-size: 13px;
   font-weight: 800;
+}
+
+.primary-mini-button {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 999px;
+  background: #f1f1f1;
+  color: transparent;
+  font-size: 0;
+  line-height: 0;
+  display: block;
+  position: relative;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.primary-mini-button::before,
+.primary-mini-button::after {
+  content: "";
+  position: absolute;
+  width: 16px;
+  height: 2.5px;
+  border-radius: 999px;
+  background: #111111;
+  left: 50%;
+  top: 50%;
+  transform-origin: center;
+}
+
+.primary-mini-button::before {
+  transform: translate(-50%, -50%);
+}
+
+.primary-mini-button::after {
+  transform: translate(-50%, -50%) rotate(90deg);
 }
 
 .workout-editor-button.active {
