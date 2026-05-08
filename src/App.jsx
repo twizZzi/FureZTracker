@@ -180,10 +180,9 @@ export default function App() {
 
   const isCurrentMonth = currentYear === todayYear && currentMonth === todayMonth;
 
-  const monthName = visibleDate.toLocaleString("ru-RU", {
-    month: "long",
-    year: "numeric",
-  });
+  const monthName = `${visibleDate.toLocaleString("ru-RU", {
+  month: "long",
+})} ${visibleDate.getFullYear()}`;
 
   const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
   const firstDayOfMonth = new Date(currentYear, currentMonth, 1);
@@ -760,6 +759,65 @@ export default function App() {
     setNewExerciseGroup("");
   };
 
+  const createLibraryExerciseFromPicker = (exerciseName) => {
+  const cleanName = exerciseName.trim();
+
+  if (!cleanName) return;
+
+  const newExercise = {
+    id: createId("exercise"),
+    name: cleanName,
+    muscleGroup: "Без группы",
+  };
+
+  setData((prev) => ({
+    ...prev,
+    exerciseLibrary: [...(prev.exerciseLibrary || []), newExercise],
+
+    workoutTemplates: (prev.workoutTemplates || []).map((template) => {
+      if (template.id !== selectedTemplateId) return template;
+
+      return {
+        ...template,
+        exercises: [
+          ...(template.exercises || []),
+          {
+            exerciseId: newExercise.id,
+            sets: 3,
+            reps: "8–10",
+            weight: "",
+          },
+        ],
+      };
+    }),
+  }));
+};
+
+  const deleteLibraryExercise = (exerciseId) => {
+  const exercise = data.exerciseLibrary.find((item) => item.id === exerciseId);
+
+  if (!exercise) return;
+
+  const isConfirmed = window.confirm(
+    `Удалить упражнение "${exercise.name}" из библиотеки и всех сетов? Старые тренировки не изменятся.`
+  );
+
+  if (!isConfirmed) return;
+
+  setData((prev) => ({
+    ...prev,
+    exerciseLibrary: (prev.exerciseLibrary || []).filter(
+      (item) => item.id !== exerciseId
+    ),
+    workoutTemplates: (prev.workoutTemplates || []).map((template) => ({
+      ...template,
+      exercises: (template.exercises || []).filter(
+        (templateExercise) => templateExercise.exerciseId !== exerciseId
+      ),
+    })),
+  }));
+};
+
   /* =========================
      Notes
   ========================= */
@@ -944,6 +1002,8 @@ export default function App() {
             setNewExerciseName={setNewExerciseName}
             setNewExerciseGroup={setNewExerciseGroup}
             createLibraryExercise={createLibraryExercise}
+            deleteLibraryExercise={deleteLibraryExercise}
+            createLibraryExerciseFromPicker={createLibraryExerciseFromPicker}
             closeDay={() => setSelectedDay(null)}
           />
         )}
@@ -1053,6 +1113,8 @@ function WorkoutsPage({
   setNewExerciseName,
   setNewExerciseGroup,
   createLibraryExercise,
+  deleteLibraryExercise,
+  createLibraryExerciseFromPicker,
   closeDay,
 }) {
   return (
@@ -1081,17 +1143,23 @@ function WorkoutsPage({
       </header>
 
       <section className="calendar-card">
-        <div className="month-row">
-          <button type="button" onClick={() => changeMonth(-1)}>
-            ←
-          </button>
+  <div className="month-row">
+    <button
+      type="button"
+      className="month-arrow month-arrow-left"
+      onClick={() => changeMonth(-1)}
+      aria-label="Предыдущий месяц"
+    />
 
-          <span>{monthName}</span>
+    <span>{monthName}</span>
 
-          <button type="button" onClick={() => changeMonth(1)}>
-            →
-          </button>
-        </div>
+    <button
+      type="button"
+      className="month-arrow month-arrow-right"
+      onClick={() => changeMonth(1)}
+      aria-label="Следующий месяц"
+    />
+  </div>
 
         <div className="calendar-weekdays">
           {["M", "T", "W", "T", "F", "S", "S"].map((day, index) => (
@@ -1156,6 +1224,8 @@ function WorkoutsPage({
           setNewExerciseName={setNewExerciseName}
           setNewExerciseGroup={setNewExerciseGroup}
           createLibraryExercise={createLibraryExercise}
+          deleteLibraryExercise={deleteLibraryExercise}
+          createLibraryExerciseFromPicker={createLibraryExerciseFromPicker}
         />
       )}
 
@@ -1737,9 +1807,35 @@ function TemplateManager({
   setNewExerciseName,
   setNewExerciseGroup,
   createLibraryExercise,
+  deleteLibraryExercise,
+  createLibraryExerciseFromPicker,
 }) {
     const [expandedTemplateExercise, setExpandedTemplateExercise] = useState(null);
     const [isLibraryOpen, setIsLibraryOpen] = useState(false);
+    const [isExercisePickerOpen, setIsExercisePickerOpen] = useState(false);
+    const [exerciseSearch, setExerciseSearch] = useState("");
+
+    const filteredExercises = exerciseLibrary.filter((exercise) => {
+  const searchValue = exerciseSearch.trim().toLowerCase();
+
+  if (!searchValue) return true;
+
+  return (
+    exercise.name.toLowerCase().includes(searchValue) ||
+    exercise.muscleGroup.toLowerCase().includes(searchValue)
+  );
+});
+
+const createExerciseFromSearch = () => {
+  const exerciseName = exerciseSearch.trim();
+
+  if (!exerciseName) return;
+
+  createLibraryExerciseFromPicker(exerciseName);
+
+  setIsExercisePickerOpen(false);
+  setExerciseSearch("");
+};
 
   return (
     <div className="template-manager">
@@ -1870,26 +1966,77 @@ function TemplateManager({
 </div>
 
             <div className="add-log-exercise">
-              <p className="eyebrow">Добавить в сет</p>
+  <p className="eyebrow">Добавить в сет</p>
 
-              <select
-                defaultValue=""
-                onChange={(event) => {
-                  addExerciseToTemplate(event.target.value);
-                  event.target.value = "";
-                }}
-              >
-                <option value="" disabled>
-                  Выбери упражнение
-                </option>
+  <button
+    type="button"
+    className="exercise-picker-open"
+    onClick={() => setIsExercisePickerOpen(true)}
+  >
+    <span>Выбрать упражнение</span>
+    <strong>+</strong>
+  </button>
+</div>
 
-                {exerciseLibrary.map((exercise) => (
-                  <option key={exercise.id} value={exercise.id}>
-                    {exercise.name} · {exercise.muscleGroup}
-                  </option>
-                ))}
-              </select>
-            </div>
+{isExercisePickerOpen && (
+  <div className="exercise-picker-backdrop">
+    <div className="exercise-picker-modal">
+      <div className="exercise-picker-top">
+        <div>
+          <p className="eyebrow">Библиотека</p>
+          <h2>Выбери упражнение</h2>
+        </div>
+
+        <button
+          type="button"
+          className="icon-button"
+          onClick={() => {
+            setIsExercisePickerOpen(false);
+            setExerciseSearch("");
+          }}
+        >
+          ×
+        </button>
+      </div>
+
+      <input
+        className="exercise-picker-search"
+        type="text"
+        placeholder="Поиск упражнения"
+        value={exerciseSearch}
+        onChange={(event) => setExerciseSearch(event.target.value)}
+      />
+
+      <div className="exercise-picker-list">
+        {filteredExercises.length > 0 ? (
+          filteredExercises.map((exercise) => (
+            <button
+              type="button"
+              className="exercise-picker-item"
+              key={exercise.id}
+              onClick={() => {
+                addExerciseToTemplate(exercise.id);
+                setIsExercisePickerOpen(false);
+                setExerciseSearch("");
+              }}
+            >
+              <strong>{exercise.name}</strong>
+              <span>{exercise.muscleGroup}</span>
+            </button>
+          ))
+        ) : (
+          <div className="exercise-picker-empty">
+            <p>Ничего не нашлось :(</p>
+
+            <button type="button" onClick={createExerciseFromSearch}>
+              Добавить “{exerciseSearch.trim()}”
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  </div>
+)}
 
             <button type="button" className="danger-button" onClick={deleteTemplate}>
               Удалить сет
@@ -1923,13 +2070,23 @@ function TemplateManager({
   {isLibraryOpen && (
     <>
       <div className="library-list">
-        {exerciseLibrary.map((exercise) => (
-          <div className="library-item" key={exercise.id}>
-            <strong>{exercise.name}</strong>
-            <span>{exercise.muscleGroup}</span>
-          </div>
-        ))}
+  {exerciseLibrary.map((exercise) => (
+    <div className="library-item" key={exercise.id}>
+      <div className="library-item-info">
+        <strong>{exercise.name}</strong>
+        <span>{exercise.muscleGroup}</span>
       </div>
+
+      <button
+        type="button"
+        className="delete-exercise-button"
+        onClick={() => deleteLibraryExercise(exercise.id)}
+      >
+        ×
+      </button>
+    </div>
+  ))}
+</div>
 
       <div className="library-form">
         <input
