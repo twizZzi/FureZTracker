@@ -1388,9 +1388,8 @@ function WorkoutLogView({
   deleteSelectedWorkout,
   getPreviousExerciseInfo,
 }) {
-  const [isWorkoutExercisePickerOpen, setIsWorkoutExercisePickerOpen] =
+   const [isWorkoutExercisePickerOpen, setIsWorkoutExercisePickerOpen] =
     useState(false);
-
   const [workoutExerciseSearch, setWorkoutExerciseSearch] = useState("");
 
   const filteredWorkoutExercises = exerciseLibrary.filter((exercise) => {
@@ -1576,11 +1575,12 @@ function WorkoutLogView({
           ))
         ) : (
           <div className="exercise-picker-empty">
-            <p>Ничего не нашлось :(</p>
-            <button type="button" disabled>
-              Добавь упражнение через Сеты → Библиотека
-            </button>
-          </div>
+  <p>Ничего не нашлось :(</p>
+
+  <span className="exercise-picker-empty-note">
+    Создать новое упражнение можно в разделе Сеты → Библиотека.
+  </span>
+</div>
         )}
       </div>
     </div>
