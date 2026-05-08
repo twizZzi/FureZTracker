@@ -759,15 +759,16 @@ export default function App() {
     setNewExerciseGroup("");
   };
 
-  const createLibraryExerciseFromPicker = (exerciseName) => {
+const createLibraryExerciseFromPicker = (exerciseName, muscleGroup = "Без группы") => {
   const cleanName = exerciseName.trim();
+  const cleanGroup = muscleGroup.trim() || "Без группы";
 
   if (!cleanName) return;
 
   const newExercise = {
     id: createId("exercise"),
     name: cleanName,
-    muscleGroup: "Без группы",
+    muscleGroup: cleanGroup,
   };
 
   setData((prev) => ({
@@ -1814,6 +1815,7 @@ function TemplateManager({
     const [isLibraryOpen, setIsLibraryOpen] = useState(false);
     const [isExercisePickerOpen, setIsExercisePickerOpen] = useState(false);
     const [exerciseSearch, setExerciseSearch] = useState("");
+    const [exercisePickerGroup, setExercisePickerGroup] = useState("");
 
     const filteredExercises = exerciseLibrary.filter((exercise) => {
   const searchValue = exerciseSearch.trim().toLowerCase();
@@ -1831,10 +1833,14 @@ const createExerciseFromSearch = () => {
 
   if (!exerciseName) return;
 
-  createLibraryExerciseFromPicker(exerciseName);
+  createLibraryExerciseFromPicker(
+    exerciseName,
+    exercisePickerGroup || "Без группы"
+  );
 
   setIsExercisePickerOpen(false);
   setExerciseSearch("");
+  setExercisePickerGroup("");
 };
 
   return (
@@ -1991,12 +1997,13 @@ const createExerciseFromSearch = () => {
           type="button"
           className="icon-button"
           onClick={() => {
-            setIsExercisePickerOpen(false);
-            setExerciseSearch("");
-          }}
-        >
+          setIsExercisePickerOpen(false);
+          setExerciseSearch("");
+          setExercisePickerGroup("");
+         }}
+      >
           ×
-        </button>
+          </button>
       </div>
 
       <input
@@ -2026,12 +2033,23 @@ const createExerciseFromSearch = () => {
           ))
         ) : (
           <div className="exercise-picker-empty">
-            <p>Ничего не нашлось :(</p>
+  <p>Ничего не нашлось :(</p>
 
-            <button type="button" onClick={createExerciseFromSearch}>
-              Добавить “{exerciseSearch.trim()}”
-            </button>
-          </div>
+  <label className="exercise-picker-group-field">
+    <span>Группа мышц</span>
+
+    <input
+      type="text"
+      placeholder="Например: Спина"
+      value={exercisePickerGroup}
+      onChange={(event) => setExercisePickerGroup(event.target.value)}
+    />
+  </label>
+
+  <button type="button" onClick={createExerciseFromSearch}>
+    Добавить “{exerciseSearch.trim()}”
+  </button>
+</div>
         )}
       </div>
     </div>
