@@ -1388,6 +1388,21 @@ function WorkoutLogView({
   deleteSelectedWorkout,
   getPreviousExerciseInfo,
 }) {
+  const [isWorkoutExercisePickerOpen, setIsWorkoutExercisePickerOpen] =
+    useState(false);
+
+  const [workoutExerciseSearch, setWorkoutExerciseSearch] = useState("");
+
+  const filteredWorkoutExercises = exerciseLibrary.filter((exercise) => {
+    const searchValue = workoutExerciseSearch.trim().toLowerCase();
+
+    if (!searchValue) return true;
+
+    return (
+      exercise.name.toLowerCase().includes(searchValue) ||
+      exercise.muscleGroup.toLowerCase().includes(searchValue)
+    );
+  });
   return (
     <div>
       <div className="workout-title-row">
@@ -1501,26 +1516,76 @@ function WorkoutLogView({
       </div>
 
       <div className="add-log-exercise">
-        <p className="eyebrow">Добавить упражнение</p>
+  <p className="eyebrow">Добавить упражнение</p>
 
-        <select
-          defaultValue=""
-          onChange={(event) => {
-            addExerciseToSelectedWorkout(event.target.value);
-            event.target.value = "";
+  <button
+    type="button"
+    className="exercise-picker-open"
+    onClick={() => setIsWorkoutExercisePickerOpen(true)}
+  >
+    <span>Выбрать упражнение</span>
+    <strong>+</strong>
+  </button>
+</div>
+
+{isWorkoutExercisePickerOpen && (
+  <div className="exercise-picker-backdrop">
+    <div className="exercise-picker-modal">
+      <div className="exercise-picker-top">
+        <div>
+          <p className="eyebrow">Библиотека</p>
+          <h2>Выбери упражнение</h2>
+        </div>
+
+        <button
+          type="button"
+          className="icon-button"
+          onClick={() => {
+            setIsWorkoutExercisePickerOpen(false);
+            setWorkoutExerciseSearch("");
           }}
         >
-          <option value="" disabled>
-            Выбери упражнение
-          </option>
-
-          {exerciseLibrary.map((exercise) => (
-            <option key={exercise.id} value={exercise.id}>
-              {exercise.name} · {exercise.muscleGroup}
-            </option>
-          ))}
-        </select>
+          ×
+        </button>
       </div>
+
+      <input
+        className="exercise-picker-search"
+        type="text"
+        placeholder="Поиск упражнения"
+        value={workoutExerciseSearch}
+        onChange={(event) => setWorkoutExerciseSearch(event.target.value)}
+      />
+
+      <div className="exercise-picker-list">
+        {filteredWorkoutExercises.length > 0 ? (
+          filteredWorkoutExercises.map((exercise) => (
+            <button
+              type="button"
+              className="exercise-picker-item"
+              key={exercise.id}
+              onClick={() => {
+                addExerciseToSelectedWorkout(exercise.id);
+                setIsWorkoutExercisePickerOpen(false);
+                setWorkoutExerciseSearch("");
+              }}
+            >
+              <strong>{exercise.name}</strong>
+              <span>{exercise.muscleGroup}</span>
+            </button>
+          ))
+        ) : (
+          <div className="exercise-picker-empty">
+            <p>Ничего не нашлось :(</p>
+            <button type="button" disabled>
+              Добавь упражнение через Сеты → Библиотека
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  </div>
+)}
 
       <button
         type="button"
