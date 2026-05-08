@@ -295,32 +295,34 @@ export default function App() {
     : null;
 
   const foodHistory = foodEntries
-    .filter((item) => item.date && item.date !== todayDateKey)
-    .reduce((history, item) => {
-      const existingDay = history.find((day) => day.date === item.date);
+  .filter((item) => item.date && item.date !== todayDateKey)
+  .reduce((history, item) => {
+    const existingDay = history.find((day) => day.date === item.date);
 
-      if (existingDay) {
-        existingDay.calories += Number(item.calories || 0);
-        existingDay.protein += Number(item.protein || 0);
-        existingDay.fat += Number(item.fat || 0);
-        existingDay.carbs += Number(item.carbs || 0);
+    if (existingDay) {
+      existingDay.calories += Number(item.calories || 0);
+      existingDay.protein += Number(item.protein || 0);
+      existingDay.fat += Number(item.fat || 0);
+      existingDay.carbs += Number(item.carbs || 0);
+      existingDay.items.push(item);
 
-        return history;
-      }
+      return history;
+    }
 
-      return [
-        ...history,
-        {
-          date: item.date,
-          calories: Number(item.calories || 0),
-          protein: Number(item.protein || 0),
-          fat: Number(item.fat || 0),
-          carbs: Number(item.carbs || 0),
-        },
-      ];
-    }, [])
-    .sort((a, b) => b.date.localeCompare(a.date))
-    .slice(0, 7);
+    return [
+      ...history,
+      {
+        date: item.date,
+        calories: Number(item.calories || 0),
+        protein: Number(item.protein || 0),
+        fat: Number(item.fat || 0),
+        carbs: Number(item.carbs || 0),
+        items: [item],
+      },
+    ];
+  }, [])
+  .sort((a, b) => b.date.localeCompare(a.date))
+  .slice(0, 7);
 
   /* =========================
      Workout stats
@@ -873,8 +875,12 @@ export default function App() {
   ========================= */
 
   return (
-    <div className="app">
-      <main className="screen">
+        <div className="app">
+          <div className="app-brand">
+            FureZ Tracker
+          </div>
+
+    <main className="screen">
         {tab === "workouts" && (
           <WorkoutsPage
             days={days}
@@ -1053,7 +1059,6 @@ function WorkoutsPage({
     <>
       <header className="header">
         <div>
-          <p className="eyebrow">FureZ Tracker</p>
           <h1>Тренировки</h1>
         </div>
 
@@ -1595,28 +1600,25 @@ function DayFoodPanel({
         )}
       </div>
 
-      <div className="macro-list">
-        <div>
-          <span>Белки</span>
-          <strong>
-            {totals.protein}/{dailyProtein || 0} г
-          </strong>
-        </div>
+      <div className="macro-cards">
+       <MacroStat
+        label="Белки"
+        current={totals.protein}
+        target={dailyProtein}
+      />
 
-        <div>
-          <span>Жиры</span>
-          <strong>
-            {totals.fat}/{dailyFat || 0} г
-          </strong>
-        </div>
+      <MacroStat
+        label="Жиры"
+        current={totals.fat}
+        target={dailyFat}
+      />
 
-        <div>
-          <span>Углеводы</span>
-          <strong>
-            {totals.carbs}/{dailyCarbs || 0} г
-          </strong>
-        </div>
-      </div>
+      <MacroStat
+        label="Углеводы"
+        current={totals.carbs}
+        target={dailyCarbs}
+      />
+     </div>
 
       <section className="day-food-form-card">
         <p className="eyebrow">
@@ -1676,6 +1678,45 @@ function DayFoodPanel({
 }
 
 /* =========================
+   MacroState
+========================= */
+
+function MacroStat({ label, current, target, unit = "г" }) {
+  const safeCurrent = Number(current) || 0;
+  const safeTarget = Number(target) || 0;
+
+  const percent =
+    safeTarget > 0 ? Math.min((safeCurrent / safeTarget) * 100, 100) : 0;
+
+  return (
+    <div className="macro-stat-card">
+      <div className="macro-stat-gauge">
+        <svg viewBox="0 0 100 60" className="macro-stat-svg" aria-hidden="true">
+          <path
+            d="M 10 50 A 40 40 0 0 1 90 50"
+            className="macro-stat-track"
+            pathLength="100"
+          />
+
+          <path
+            d="M 10 50 A 40 40 0 0 1 90 50"
+            className="macro-stat-progress"
+            pathLength="100"
+            strokeDasharray={`${percent} 100`}
+          />
+        </svg>
+      </div>
+
+      <strong className="macro-stat-value">
+        {safeCurrent}/{safeTarget} {unit}
+      </strong>
+
+      <span className="macro-stat-label">{label}</span>
+    </div>
+  );
+}
+
+/* =========================
    Template manager
 ========================= */
 
@@ -1697,6 +1738,9 @@ function TemplateManager({
   setNewExerciseGroup,
   createLibraryExercise,
 }) {
+    const [expandedTemplateExercise, setExpandedTemplateExercise] = useState(null);
+    const [isLibraryOpen, setIsLibraryOpen] = useState(false);
+
   return (
     <div className="template-manager">
       <section className="settings-card">
@@ -1737,58 +1781,93 @@ function TemplateManager({
             </div>
 
             <div className="template-exercises-list">
-              {selectedTemplate.exercises.map((templateExercise, index) => {
-                const libraryExercise = exerciseLibrary.find(
-                  (exercise) => exercise.id === templateExercise.exerciseId
-                );
+  {selectedTemplate.exercises.map((templateExercise, index) => {
+    const libraryExercise = exerciseLibrary.find(
+      (exercise) => exercise.id === templateExercise.exerciseId
+    );
 
-                return (
-                  <div className="template-exercise-item" key={`${templateExercise.exerciseId}-${index}`}>
-                    <div className="template-exercise-name">
-                      <strong>{libraryExercise?.name || "Упражнение"}</strong>
-                      <p>{libraryExercise?.muscleGroup || "Без группы"}</p>
-                    </div>
+    const isExpanded = expandedTemplateExercise === index;
 
-                    <div className="template-exercise-grid">
-                      <input
-                        type="text"
-                        value={templateExercise.weight}
-                        onChange={(event) =>
-                          updateTemplateExercise(index, "weight", event.target.value)
-                        }
-                        placeholder="вес"
-                      />
+    return (
+      <div
+        className={`template-exercise-item ${
+          isExpanded ? "expanded" : ""
+        }`}
+        key={`${templateExercise.exerciseId}-${index}`}
+      >
+        <button
+          type="button"
+          className="template-exercise-main"
+          onClick={() =>
+            setExpandedTemplateExercise(isExpanded ? null : index)
+          }
+        >
+          <div className="template-exercise-name">
+            <strong>{libraryExercise?.name || "Упражнение"}</strong>
+            <p>{libraryExercise?.muscleGroup || "Без группы"}</p>
+          </div>
 
-                      <input
-                        type="number"
-                        value={templateExercise.sets}
-                        onChange={(event) =>
-                          updateTemplateExercise(index, "sets", event.target.value)
-                        }
-                        placeholder="подх."
-                      />
+          <span className="template-exercise-summary">
+            {templateExercise.weight || "без веса"} ·{" "}
+            {templateExercise.sets} подх. · {templateExercise.reps}
+          </span>
 
-                      <input
-                        type="text"
-                        value={templateExercise.reps}
-                        onChange={(event) =>
-                          updateTemplateExercise(index, "reps", event.target.value)
-                        }
-                        placeholder="повт."
-                      />
-                    </div>
+           <span className="template-exercise-edit-hint">
+            {isExpanded ? "Скрыть редактор" : "Редактировать"}
+          </span>
+        </button>
 
-                    <button
-                      type="button"
-                      className="delete-exercise-button"
-                      onClick={() => removeExerciseFromTemplate(index)}
-                    >
-                      ×
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
+        <button
+          type="button"
+          className="delete-exercise-button"
+          onClick={() => removeExerciseFromTemplate(index)}
+        >
+          ×
+        </button>
+
+        {isExpanded && (
+          <div className="template-exercise-grid">
+            <label>
+              <span>Вес</span>
+              <input
+                type="text"
+                value={templateExercise.weight}
+                onChange={(event) =>
+                  updateTemplateExercise(index, "weight", event.target.value)
+                }
+                placeholder="60 кг"
+              />
+            </label>
+
+            <label>
+              <span>Подходы</span>
+              <input
+                type="number"
+                value={templateExercise.sets}
+                onChange={(event) =>
+                  updateTemplateExercise(index, "sets", event.target.value)
+                }
+                placeholder="4"
+              />
+            </label>
+
+            <label>
+              <span>Повторы</span>
+              <input
+                type="text"
+                value={templateExercise.reps}
+                onChange={(event) =>
+                  updateTemplateExercise(index, "reps", event.target.value)
+                }
+                placeholder="8–10"
+              />
+            </label>
+          </div>
+        )}
+      </div>
+    );
+  })}
+</div>
 
             <div className="add-log-exercise">
               <p className="eyebrow">Добавить в сет</p>
@@ -1821,39 +1900,63 @@ function TemplateManager({
         )}
       </section>
 
-      <section className="settings-card">
-        <p className="eyebrow">Библиотека</p>
-        <h2>Упражнения</h2>
+      <section className="settings-card library-section">
+  <button
+    type="button"
+    className="library-toggle"
+    onClick={() => setIsLibraryOpen((prev) => !prev)}
+  >
+    <div>
+      <p className="eyebrow">Библиотека</p>
+      <h2>Упражнения</h2>
+    </div>
 
-        <div className="library-list">
-          {exerciseLibrary.map((exercise) => (
-            <div className="library-item" key={exercise.id}>
-              <strong>{exercise.name}</strong>
-              <span>{exercise.muscleGroup}</span>
-            </div>
-          ))}
-        </div>
+    <span>{isLibraryOpen ? "Скрыть" : "Открыть"}</span>
+  </button>
 
-        <div className="library-form">
-          <input
-            type="text"
-            placeholder="Новое упражнение"
-            value={newExerciseName}
-            onChange={(event) => setNewExerciseName(event.target.value)}
-          />
+  {!isLibraryOpen && (
+    <p className="settings-note">
+      Здесь хранятся упражнения, которые можно добавлять в сеты.
+    </p>
+  )}
 
-          <input
-            type="text"
-            placeholder="Группа мышц"
-            value={newExerciseGroup}
-            onChange={(event) => setNewExerciseGroup(event.target.value)}
-          />
+  {isLibraryOpen && (
+    <>
+      <div className="library-list">
+        {exerciseLibrary.map((exercise) => (
+          <div className="library-item" key={exercise.id}>
+            <strong>{exercise.name}</strong>
+            <span>{exercise.muscleGroup}</span>
+          </div>
+        ))}
+      </div>
 
-          <button type="button" className="primary-button" onClick={createLibraryExercise}>
-            Добавить упражнение
-          </button>
-        </div>
-      </section>
+      <div className="library-form">
+        <input
+          type="text"
+          placeholder="Новое упражнение"
+          value={newExerciseName}
+          onChange={(event) => setNewExerciseName(event.target.value)}
+        />
+
+        <input
+          type="text"
+          placeholder="Группа мышц"
+          value={newExerciseGroup}
+          onChange={(event) => setNewExerciseGroup(event.target.value)}
+        />
+
+        <button
+          type="button"
+          className="primary-button"
+          onClick={createLibraryExercise}
+        >
+          Добавить упражнение
+        </button>
+      </div>
+    </>
+  )}
+</section>
     </div>
   );
 }
@@ -1882,11 +1985,12 @@ function FoodPage({
   deleteFoodEntry,
   resetFoodForm,
 }) {
+    const [expandedFoodDate, setExpandedFoodDate] = useState(null);
+
   return (
     <>
       <header className="header">
         <div>
-          <p className="eyebrow">FureZ Tracker</p>
           <h1>Еда</h1>
         </div>
       </header>
@@ -1912,22 +2016,25 @@ function FoodPage({
 
             <p className="food-note">Осталось: {remainingCalories} ккал</p>
 
-            <div className="macro-list">
-              <div>
-                <span>Белки</span>
-                <strong>{eatenProtein}/{dailyProtein} г</strong>
-              </div>
+            <div className="macro-cards">
+             <MacroStat
+               label="Белки"
+               current={eatenProtein}
+               target={dailyProtein}
+             />
 
-              <div>
-                <span>Жиры</span>
-                <strong>{eatenFat}/{dailyFat} г</strong>
-              </div>
+             <MacroStat
+               label="Жиры"
+               current={eatenFat}
+               target={dailyFat}
+             />
 
-              <div>
-                <span>Углеводы</span>
-                <strong>{eatenCarbs}/{dailyCarbs} г</strong>
-              </div>
-            </div>
+             <MacroStat
+               label="Углеводы"
+               current={eatenCarbs}
+               target={dailyCarbs}
+             />
+           </div>
           </>
         ) : (
           <p className="profile-hint">
@@ -1975,31 +2082,63 @@ function FoodPage({
       </section>
 
       <section className="food-card">
-        <p className="eyebrow">История</p>
+  <p className="eyebrow">История</p>
 
-        {foodHistory.length > 0 ? (
-          <div className="food-list">
-            {foodHistory.map((day) => (
-              <div className="food-history-item" key={day.date}>
-                <div>
-                  <strong>
-                    {new Date(day.date).toLocaleDateString("ru-RU", {
-                      day: "numeric",
-                      month: "long",
-                    })}
-                  </strong>
+  {foodHistory.length > 0 ? (
+    <div className="food-history-list">
+      {foodHistory.map((day) => {
+        const isExpanded = expandedFoodDate === day.date;
 
-                  <p>Б {day.protein} · Ж {day.fat} · У {day.carbs}</p>
-                </div>
+        return (
+          <div className="food-history-day" key={day.date}>
+            <button
+              type="button"
+              className="food-history-header"
+              onClick={() =>
+                setExpandedFoodDate(isExpanded ? null : day.date)
+              }
+            >
+              <div>
+                <strong>
+                  {new Date(day.date).toLocaleDateString("ru-RU", {
+                    day: "numeric",
+                    month: "long",
+                  })}
+                </strong>
 
-                <span>{day.calories} ккал</span>
+                <p>
+                  Б {day.protein} · Ж {day.fat} · У {day.carbs}
+                </p>
               </div>
-            ))}
+
+              <div className="food-history-summary">
+                <span>{day.calories} ккал</span>
+                <small>{isExpanded ? "Скрыть" : "Блюда"}</small>
+              </div>
+            </button>
+
+            {isExpanded && (
+              <div className="food-history-meals">
+                {day.items.map((item) => (
+                  <div className="food-history-meal" key={item.id}>
+                    <strong>{item.name}</strong>
+
+                    <p>
+                      {item.calories} ккал · Б {item.protein} · Ж{" "}
+                      {item.fat} · У {item.carbs}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-        ) : (
-          <p className="profile-hint">История пока пустая.</p>
-        )}
-      </section>
+        );
+      })}
+    </div>
+  ) : (
+    <p className="profile-hint">История пока пустая.</p>
+  )}
+</section>
     </>
   );
 }
@@ -2013,7 +2152,6 @@ function ProfilePage({ profile, bmi, bmiStatus, updateProfile }) {
     <>
       <header className="header">
         <div>
-          <p className="eyebrow">FureZ Tracker</p>
           <h1>Профиль</h1>
         </div>
       </header>
@@ -2140,7 +2278,7 @@ function ProfilePage({ profile, bmi, bmiStatus, updateProfile }) {
       </section>
 
       <div className="profile-footer">
-        <span>FureZ Tracker · v0.2.0</span>
+        <span>FureZ Tracker · v0.3.0</span>
         <span>Made with love by FureZ</span>
       </div>
     </>
