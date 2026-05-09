@@ -1697,3 +1697,220 @@ p {
   font-weight: 700;
   line-height: 1.35;
 }
+
+.muscle-group-picker {
+  position: relative;
+  width: 100%;
+}
+
+.muscle-group-picker-button {
+  width: 100%;
+  height: 48px;
+  border: 1px solid #e2e2e2;
+  border-radius: 18px;
+  background: #ffffff;
+  color: #777777;
+  padding: 0 14px 0 15px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 15px;
+  font-weight: 800;
+  text-align: left;
+}
+
+.muscle-group-picker-button.selected {
+  color: #111111;
+}
+
+.muscle-group-picker-button strong {
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  background: #f1f1f1;
+  color: transparent;
+  font-size: 0;
+  line-height: 0;
+  display: block;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.muscle-group-picker-button strong::before,
+.muscle-group-picker-button strong::after {
+  content: "";
+  position: absolute;
+  width: 14px;
+  height: 2.4px;
+  border-radius: 999px;
+  background: #111111;
+  left: 50%;
+  top: 50%;
+  transform-origin: center;
+}
+
+.muscle-group-picker-button strong::before {
+  transform: translate(-50%, -50%);
+}
+
+.muscle-group-picker-button strong::after {
+  transform: translate(-50%, -50%) rotate(90deg);
+}
+
+.muscle-group-picker-dropdown {
+  width: 100%;
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid #e7e7e7;
+  border-radius: 22px;
+  background: #f5f5f5;
+}
+
+.muscle-group-picker-list {
+  display: grid;
+  gap: 8px;
+  max-height: 230px;
+  overflow-y: auto;
+  margin-top: 10px;
+}
+
+.muscle-group-picker-item {
+  width: 100%;
+  min-height: 46px;
+  border: 1px solid #e7e7e7;
+  border-radius: 16px;
+  background: #ffffff;
+  color: #111111;
+  padding: 0 14px;
+  font-size: 14px;
+  font-weight: 900;
+  text-align: left;
+}
+
+.primary-button:disabled,
+.exercise-picker-empty button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.profile-preferences-card {
+  overflow: visible;
+}
+
+.profile-preferences-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.compact-profile-select {
+  position: relative;
+  min-width: 0;
+}
+
+.compact-profile-select-button {
+  width: 100%;
+  min-height: 78px;
+  border: 1px solid #e7e7e7;
+  border-radius: 20px;
+  background: #ffffff;
+  padding: 13px 14px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.compact-profile-select-button span {
+  color: #777777;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.compact-profile-select-button strong {
+  margin-top: 8px;
+  color: #111111;
+  font-size: 17px;
+  font-weight: 900;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+}
+
+.compact-profile-select-button small {
+  margin-top: 5px;
+  color: #777777;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.compact-profile-select-button.open {
+  border-color: #111111;
+}
+
+.compact-profile-select-list {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid #e7e7e7;
+  border-radius: 20px;
+  background: #f5f5f5;
+  box-shadow: 0 18px 40px rgba(17, 17, 17, 0.12);
+}
+
+.compact-profile-select-list button {
+  width: 100%;
+  min-height: 52px;
+  border: 1px solid #e7e7e7;
+  border-radius: 16px;
+  background: #ffffff;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.compact-profile-select-list button strong {
+  display: block;
+  color: #111111;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.15;
+}
+
+.compact-profile-select-list button span {
+  display: block;
+  margin-top: 4px;
+  color: #777777;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.compact-profile-select-list button.active {
+  border-color: #111111;
+  background: #111111;
+}
+
+.compact-profile-select-list button.active strong,
+.compact-profile-select-list button.active span {
+  color: #ffffff;
+}
+
+@media (max-width: 370px) {
+  .profile-preferences-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .compact-profile-select-list {
+    position: static;
+    margin-top: 8px;
+  }
+}

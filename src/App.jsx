@@ -18,6 +18,7 @@ const initialData = {
   gender: "male",
   age: "",
   goal: "maintain",
+  activity: "light",
 },
 
   exerciseLibrary: [
@@ -69,11 +70,81 @@ const initialData = {
 
 const weekDaysShort = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 
-const calorieMultiplier = {
-  bulk: 35,
-  maintain: 30,
-  cut: 25,
-};
+
+const profileGoalOptions = [
+  {
+    id: "bulk",
+    title: "Набор",
+    description: "Профицит",
+    calorieModifier: 1.12,
+    proteinPerKg: 2,
+    fatPerKg: 1,
+  },
+  {
+    id: "cut",
+    title: "Сушка",
+    description: "Дефицит",
+    calorieModifier: 0.85,
+    proteinPerKg: 2.2,
+    fatPerKg: 0.8,
+  },
+  {
+    id: "maintain",
+    title: "Поддержание",
+    description: "Стабильно",
+    calorieModifier: 1,
+    proteinPerKg: 1.8,
+    fatPerKg: 0.9,
+  },
+];
+
+const profileActivityOptions = [
+  {
+    id: "minimal",
+    title: "Минимальная",
+    description: "Мало движения",
+    multiplier: 1.2,
+  },
+  {
+    id: "light",
+    title: "Лёгкая",
+    description: "1–3 тренировки",
+    multiplier: 1.375,
+  },
+  {
+    id: "medium",
+    title: "Средняя",
+    description: "3–5 тренировок",
+    multiplier: 1.55,
+  },
+  {
+    id: "high",
+    title: "Высокая",
+    description: "5–6 тренировок",
+    multiplier: 1.725,
+  },
+  {
+    id: "very-high",
+    title: "Очень высокая",
+    description: "Тяжёлый режим",
+    multiplier: 1.9,
+  },
+];
+
+const MUSCLE_GROUPS = [
+  "Грудь",
+  "Спина",
+  "Ноги",
+  "Плечи",
+  "Бицепс",
+  "Трицепс",
+  "Пресс",
+  "Ягодицы",
+  "Кардио",
+  "Другое",
+];
+
+const DEFAULT_MUSCLE_GROUP = "Другое";
 
 /* =========================
    Helpers
@@ -230,26 +301,64 @@ export default function App() {
   ========================= */
 
   const profileWeight = Number(data.profile?.weight);
-  const profileHeight = Number(data.profile?.height);
+const profileHeight = Number(data.profile?.height);
+const profileAge = Number(data.profile?.age);
+const profileGender = data.profile?.gender || "male";
+const profileGoal = data.profile?.goal || "maintain";
+const profileActivity = data.profile?.activity || "light";
 
-  const bmi =
-    profileWeight > 0 && profileHeight > 0
-      ? profileWeight / (profileHeight / 100) ** 2
-      : null;
-
-  const bmiStatus = getBmiStatus(bmi);
-
-  const dailyCalories = profileWeight
-    ? Math.round(profileWeight * calorieMultiplier[data.profile?.goal || "maintain"])
+const bmi =
+  profileWeight > 0 && profileHeight > 0
+    ? profileWeight / (profileHeight / 100) ** 2
     : null;
 
-  const dailyProtein = profileWeight ? Math.round(profileWeight * 2) : null;
-  const dailyFat = profileWeight ? Math.round(profileWeight * 0.8) : null;
+const bmiStatus = getBmiStatus(bmi);
 
-  const dailyCarbs =
-    dailyCalories && dailyProtein && dailyFat
-      ? Math.round((dailyCalories - dailyProtein * 4 - dailyFat * 9) / 4)
-      : null;
+const selectedGoal =
+  profileGoalOptions.find((goal) => goal.id === profileGoal) ||
+  profileGoalOptions.find((goal) => goal.id === "maintain");
+
+const selectedActivity =
+  profileActivityOptions.find((activity) => activity.id === profileActivity) ||
+  profileActivityOptions.find((activity) => activity.id === "light");
+
+const bmr =
+  profileWeight > 0 && profileHeight > 0 && profileAge > 0
+    ? Math.round(
+        10 * profileWeight +
+          6.25 * profileHeight -
+          5 * profileAge +
+          (profileGender === "male" ? 5 : -161)
+      )
+    : null;
+
+const tdee =
+  bmr && selectedActivity
+    ? Math.round(bmr * selectedActivity.multiplier)
+    : null;
+
+const dailyCalories =
+  tdee && selectedGoal
+    ? Math.round(tdee * selectedGoal.calorieModifier)
+    : null;
+
+const dailyProtein =
+  profileWeight > 0 && selectedGoal
+    ? Math.round(profileWeight * selectedGoal.proteinPerKg)
+    : null;
+
+const dailyFat =
+  profileWeight > 0 && selectedGoal
+    ? Math.round(profileWeight * selectedGoal.fatPerKg)
+    : null;
+
+const dailyCarbs =
+  dailyCalories && dailyProtein && dailyFat
+    ? Math.max(
+        0,
+        Math.round((dailyCalories - dailyProtein * 4 - dailyFat * 9) / 4)
+      )
+    : null;
 
   /* =========================
      Food
@@ -742,26 +851,34 @@ export default function App() {
   ========================= */
 
   const createLibraryExercise = () => {
-    if (!newExerciseName.trim()) return;
+  const cleanName = newExerciseName.trim();
 
-    const exercise = {
-      id: createId("exercise"),
-      name: newExerciseName.trim(),
-      muscleGroup: newExerciseGroup.trim() || "Без группы",
-    };
+  if (!cleanName || !newExerciseGroup) return;
 
-    setData((prev) => ({
-      ...prev,
-      exerciseLibrary: [...(prev.exerciseLibrary || []), exercise],
-    }));
-
-    setNewExerciseName("");
-    setNewExerciseGroup("");
+  const exercise = {
+    id: createId("exercise"),
+    name: cleanName,
+    muscleGroup: newExerciseGroup,
   };
 
-const createLibraryExerciseFromPicker = (exerciseName, muscleGroup = "Без группы") => {
+  setData((prev) => ({
+    ...prev,
+    exerciseLibrary: [...(prev.exerciseLibrary || []), exercise],
+  }));
+
+  setNewExerciseName("");
+  setNewExerciseGroup("");
+};  
+
+const createLibraryExerciseFromPicker = (
+  exerciseName,
+  muscleGroup = DEFAULT_MUSCLE_GROUP
+) => {
   const cleanName = exerciseName.trim();
-  const cleanGroup = muscleGroup.trim() || "Без группы";
+
+  const cleanGroup = MUSCLE_GROUPS.includes(muscleGroup)
+    ? muscleGroup
+    : DEFAULT_MUSCLE_GROUP;
 
   if (!cleanName) return;
 
@@ -1856,6 +1973,73 @@ function MacroStat({ label, current, target, unit = "г" }) {
    Template manager
 ========================= */
 
+function MuscleGroupPicker({ value, onChange }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState("");
+
+  const filteredGroups = MUSCLE_GROUPS.filter((group) => {
+    const searchValue = search.trim().toLowerCase();
+
+    if (!searchValue) return true;
+
+    return group.toLowerCase().includes(searchValue);
+  });
+
+  const selectGroup = (group) => {
+    onChange(group);
+    setSearch("");
+    setIsOpen(false);
+  };
+
+  return (
+    <div className="muscle-group-picker">
+      <button
+        type="button"
+        className={`muscle-group-picker-button ${value ? "selected" : ""}`}
+        onClick={() => setIsOpen((prev) => !prev)}
+      >
+        <span>{value || "Группа мышц"}</span>
+        <strong>+</strong>
+      </button>
+
+      {isOpen && (
+        <div className="muscle-group-picker-dropdown">
+          <input
+            type="text"
+            className="exercise-picker-search"
+            placeholder="Поиск группы"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            autoFocus
+          />
+
+          <div className="muscle-group-picker-list">
+            {filteredGroups.length > 0 ? (
+              filteredGroups.map((group) => (
+                <button
+                  type="button"
+                  key={group}
+                  className="muscle-group-picker-item"
+                  onClick={() => selectGroup(group)}
+                >
+                  {group}
+                </button>
+              ))
+            ) : (
+              <div className="exercise-picker-empty">
+                <p>
+                  Группа не найдена. Выбери одну из стандартных групп или используй
+                  «Другое».
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TemplateManager({
   workoutTemplates,
   exerciseLibrary,
@@ -1900,7 +2084,7 @@ const createExerciseFromSearch = () => {
 
   createLibraryExerciseFromPicker(
     exerciseName,
-    exercisePickerGroup || "Без группы"
+    exercisePickerGroup || DEFAULT_MUSCLE_GROUP
   );
 
   setIsExercisePickerOpen(false);
@@ -2100,21 +2284,23 @@ const createExerciseFromSearch = () => {
           <div className="exercise-picker-empty">
   <p>Ничего не нашлось :(</p>
 
-  <label className="exercise-picker-group-field">
-    <span>Группа мышц</span>
+     <label className="exercise-picker-group-field">
+        <span>Группа мышц</span>
 
-    <input
-      type="text"
-      placeholder="Например: Спина"
-      value={exercisePickerGroup}
-      onChange={(event) => setExercisePickerGroup(event.target.value)}
-    />
-  </label>
+        <MuscleGroupPicker
+          value={exercisePickerGroup}
+          onChange={setExercisePickerGroup}
+        />
+        </label>
 
-  <button type="button" onClick={createExerciseFromSearch}>
-    Добавить “{exerciseSearch.trim()}”
-  </button>
-</div>
+        <button
+          type="button"
+          onClick={createExerciseFromSearch}
+          disabled={!exercisePickerGroup}
+        >
+          Добавить “{exerciseSearch.trim()}”
+        </button>
+        </div>
         )}
       </div>
     </div>
@@ -2179,17 +2365,16 @@ const createExerciseFromSearch = () => {
           onChange={(event) => setNewExerciseName(event.target.value)}
         />
 
-        <input
-          type="text"
-          placeholder="Группа мышц"
+        <MuscleGroupPicker
           value={newExerciseGroup}
-          onChange={(event) => setNewExerciseGroup(event.target.value)}
+          onChange={setNewExerciseGroup}
         />
 
         <button
           type="button"
           className="primary-button"
           onClick={createLibraryExercise}
+          disabled={!newExerciseName.trim() || !newExerciseGroup}
         >
           Добавить упражнение
         </button>
@@ -2278,7 +2463,7 @@ function FoodPage({
           </>
         ) : (
           <p className="profile-hint">
-            Укажи вес в профиле, чтобы рассчитать норму калорий.
+            Укажи вес, рост, возраст, пол и активность в профиле, чтобы рассчитать норму КБЖУ.
           </p>
         )}
       </section>
@@ -2387,6 +2572,48 @@ function FoodPage({
    Profile / Settings / Nav
 ========================= */
 
+function CompactProfileSelect({ title, value, options, onChange }) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  const selectedOption =
+    options.find((option) => option.id === value) || options[0];
+
+  const selectOption = (optionId) => {
+    onChange(optionId);
+    setIsOpen(false);
+  };
+
+  return (
+    <div className="compact-profile-select">
+      <button
+        type="button"
+        className={`compact-profile-select-button ${isOpen ? "open" : ""}`}
+        onClick={() => setIsOpen((prev) => !prev)}
+      >
+        <span>{title}</span>
+        <strong>{selectedOption.title}</strong>
+        <small>{selectedOption.description}</small>
+      </button>
+
+      {isOpen && (
+        <div className="compact-profile-select-list">
+          {options.map((option) => (
+            <button
+              type="button"
+              key={option.id}
+              className={option.id === value ? "active" : ""}
+              onClick={() => selectOption(option.id)}
+            >
+              <strong>{option.title}</strong>
+              <span>{option.description}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ProfilePage({ profile, bmi, bmiStatus, updateProfile }) {
   return (
     <>
@@ -2472,35 +2699,25 @@ function ProfilePage({ profile, bmi, bmiStatus, updateProfile }) {
         </div>
       </section>
 
-      <section className="profile-card">
-        <p className="eyebrow">Цель</p>
+      <section className="profile-card profile-preferences-card">
+  <p className="eyebrow">Цель и активность</p>
 
-        <div className="goal-row">
-          <button
-            type="button"
-            className={profile?.goal === "bulk" ? "active" : ""}
-            onClick={() => updateProfile("goal", "bulk")}
-          >
-            Набор
-          </button>
+  <div className="profile-preferences-grid">
+    <CompactProfileSelect
+      title="Цель"
+      value={profile?.goal || "maintain"}
+      options={profileGoalOptions}
+      onChange={(value) => updateProfile("goal", value)}
+    />
 
-          <button
-            type="button"
-            className={profile?.goal === "cut" ? "active" : ""}
-            onClick={() => updateProfile("goal", "cut")}
-          >
-            Сушка
-          </button>
-
-          <button
-            type="button"
-            className={profile?.goal === "maintain" ? "active" : ""}
-            onClick={() => updateProfile("goal", "maintain")}
-          >
-            Поддержание
-          </button>
-        </div>
-      </section>
+    <CompactProfileSelect
+      title="Активность"
+      value={profile?.activity || "light"}
+      options={profileActivityOptions}
+      onChange={(value) => updateProfile("activity", value)}
+    />
+  </div>
+</section>
 
       <section className="profile-card bmi-card">
         <p className="eyebrow">Индекс массы тела</p>
