@@ -2060,11 +2060,23 @@ function TemplateManager({
   deleteLibraryExercise,
   createLibraryExerciseFromPicker,
 }) {
+    const [openLibraryGroup, setOpenLibraryGroup] = useState("");
     const [expandedTemplateExercise, setExpandedTemplateExercise] = useState(null);
     const [isLibraryOpen, setIsLibraryOpen] = useState(false);
     const [isExercisePickerOpen, setIsExercisePickerOpen] = useState(false);
     const [exerciseSearch, setExerciseSearch] = useState("");
     const [exercisePickerGroup, setExercisePickerGroup] = useState("");
+
+    const groupedLibraryExercises = MUSCLE_GROUPS.map((group) => {
+  const exercises = (exerciseLibrary || []).filter(
+    (exercise) => exercise.muscleGroup === group
+  );
+
+  return {
+    group,
+    exercises,
+  };
+}).filter((item) => item.exercises.length > 0);
 
     const filteredExercises = exerciseLibrary.filter((exercise) => {
   const searchValue = exerciseSearch.trim().toLowerCase();
@@ -2338,23 +2350,61 @@ const createExerciseFromSearch = () => {
 
   {isLibraryOpen && (
     <>
-      <div className="library-list">
-  {exerciseLibrary.map((exercise) => (
-    <div className="library-item" key={exercise.id}>
-      <div className="library-item-info">
-        <strong>{exercise.name}</strong>
-        <span>{exercise.muscleGroup}</span>
-      </div>
+      <div className="library-group-list">
+  {groupedLibraryExercises.length > 0 ? (
+    groupedLibraryExercises.map(({ group, exercises }) => {
+      const isOpen = openLibraryGroup === group;
 
-      <button
-        type="button"
-        className="delete-exercise-button"
-        onClick={() => deleteLibraryExercise(exercise.id)}
-      >
-        ×
-      </button>
-    </div>
-  ))}
+      return (
+        <div className="library-group" key={group}>
+          <button
+            type="button"
+            className={`library-group-toggle ${isOpen ? "active" : ""}`}
+            onClick={() =>
+              setOpenLibraryGroup((currentGroup) =>
+                currentGroup === group ? "" : group
+              )
+            }
+          >
+            <div>
+              <strong>{group}</strong>
+              <span>
+                {exercises.length}{" "}
+                {exercises.length === 1 ? "упражнение" : "упражнений"}
+              </span>
+            </div>
+
+            <em>{isOpen ? "−" : "+"}</em>
+          </button>
+
+          {isOpen && (
+            <div className="library-group-exercises">
+              {exercises.map((exercise) => (
+                <div className="library-item" key={exercise.id}>
+                  <div className="library-item-info">
+                    <strong>{exercise.name}</strong>
+                    <span>{exercise.muscleGroup}</span>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="delete-exercise-button"
+                    onClick={() => deleteLibraryExercise(exercise.id)}
+                  >
+                    Удалить
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    })
+  ) : (
+    <p className="settings-note">
+      В библиотеке пока нет упражнений. Добавь первое упражнение выше.
+    </p>
+  )}
 </div>
 
       <div className="library-form">
