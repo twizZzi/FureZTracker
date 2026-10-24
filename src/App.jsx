@@ -2040,6 +2040,51 @@ function MuscleGroupPicker({ value, onChange }) {
   );
 }
 
+function ActionSheet({ title, actions, onClose }) {
+  if (!title) return null;
+
+  return (
+    <div className="action-sheet-backdrop" onClick={onClose}>
+      <div
+        className="action-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Действия для ${title}`}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="action-sheet-header">
+          <span>Действия</span>
+          <strong>{title}</strong>
+        </div>
+
+        <div className="action-sheet-actions">
+          {actions.map((action) => (
+            <button
+              key={action.id}
+              type="button"
+              className={action.destructive ? "destructive" : ""}
+              onClick={() => {
+                action.onClick();
+                onClose();
+              }}
+            >
+              {action.label}
+            </button>
+          ))}
+        </div>
+
+        <button
+          type="button"
+          className="action-sheet-cancel"
+          onClick={onClose}
+        >
+          Отмена
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function TemplateManager({
   workoutTemplates,
   exerciseLibrary,
@@ -2066,7 +2111,7 @@ function TemplateManager({
     const [isExercisePickerOpen, setIsExercisePickerOpen] = useState(false);
     const [exerciseSearch, setExerciseSearch] = useState("");
     const [exercisePickerGroup, setExercisePickerGroup] = useState("");
-
+    const [openExerciseMenuId, setOpenExerciseMenuId] = useState(null);
     const groupedLibraryExercises = MUSCLE_GROUPS.map((group) => {
   const exercises = (exerciseLibrary || []).filter(
     (exercise) => exercise.muscleGroup === group
@@ -2386,13 +2431,48 @@ const createExerciseFromSearch = () => {
                     <span>{exercise.muscleGroup}</span>
                   </div>
 
-                  <button
-                    type="button"
-                    className="delete-exercise-button"
-                    onClick={() => deleteLibraryExercise(exercise.id)}
-                  >
-                    Удалить
-                  </button>
+                  <div className="library-action-wrapper">
+  <button
+    type="button"
+    className="library-action-button"
+    aria-label={`Действия для упражнения ${exercise.name}`}
+    aria-expanded={openExerciseMenuId === exercise.id}
+    onClick={() =>
+      setOpenExerciseMenuId((currentId) =>
+        currentId === exercise.id ? null : exercise.id
+      )
+    }
+  >
+    <span />
+    <span />
+    <span />
+  </button>
+
+  {openExerciseMenuId === exercise.id && (
+    <div className="library-action-menu">
+      <button
+        type="button"
+        onClick={() => {
+          setOpenExerciseMenuId(null);
+          console.log("Редактировать:", exercise);
+        }}
+      >
+        Редактировать
+      </button>
+
+      <button
+        type="button"
+        className="danger"
+        onClick={() => {
+          setOpenExerciseMenuId(null);
+          deleteLibraryExercise(exercise.id);
+        }}
+      >
+        Удалить
+      </button>
+    </div>
+  )}
+</div>
                 </div>
               ))}
             </div>
